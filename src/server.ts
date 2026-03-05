@@ -10,6 +10,8 @@ import { registerWisdomRelateTool } from "./mcp/tools/wisdom/relate.js";
 import { registerCodebaseIndexTool } from "./mcp/tools/codebase/index.js";
 import { registerCodebaseSearchTool } from "./mcp/tools/codebase/search.js";
 import { registerCodebaseGraphTool } from "./mcp/tools/codebase/graph.js";
+import { registerMemorySearchTool } from "./mcp/tools/unified/search.js";
+import { registerMemoryHistoryTool } from "./mcp/tools/unified/history.js";
 
 export const createServer = async (): Promise<void> => {
   const server = new McpServer(
@@ -33,6 +35,8 @@ export const createServer = async (): Promise<void> => {
   registerCodebaseIndexTool(server);
   registerCodebaseSearchTool(server);
   registerCodebaseGraphTool(server);
+  registerMemorySearchTool(server);
+  registerMemoryHistoryTool(server);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
