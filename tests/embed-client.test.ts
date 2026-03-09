@@ -1,58 +1,39 @@
-import { test } from "bun:test";
+import { test, mock } from "bun:test";
 import { strict as assert } from "node:assert";
 
-import { embedTexts } from "../src/embedding/client.js";
+mock.module("@xenova/transformers", () => ({
+  pipeline: async () =>
+    async (inputs: string[]) => ({
+      data: new Float32Array(inputs.length * 384).fill(0.25),
+    }),
+}));
 
-const createMockFetch = (responses: Array<Record<string, unknown>>) => {
-  let index = 0;
-  return async () => {
-    const response = responses[index] ?? responses[responses.length - 1];
-    index += 1;
-    return response as unknown as Response;
-  };
-};
+const { embedTexts, EMBEDDING_DIMS } = await import(
+  "../src/embedding/client.js"
+);
 
-test("embedTexts returns Float32Array vectors", async () => {
-  process.env.AITOOLINGKEY = "test-key";
-  const mockFetch = createMockFetch([
-    {
-      ok: true,
-      json: async () => ({ data: [{ embedding: [0.1, 0.2, 0.3] }] }),
-    },
-  ]);
+test("embedTexts returns Float32Array vectors with correct dims", async () => {
+  const result = await embedTexts(["hello"]);
 
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = mockFetch as unknown as typeof fetch;
+  assert.equal(result.vectors.length, 1);
+  assert.ok(result.vectors[0] instanceof Float32Array);
+  assert.equal(result.vectors[0].length, EMBEDDING_DIMS);
+  assert.equal(EMBEDDING_DIMS, 384);
+});
 
-  try {
-    const result = await embedTexts(["hello"]);
+test("embedTexts handles batch correctly", async () => {
+  const result = await embedTexts(["hello", "world"]);
 
-    assert.equal(result.vectors.length, 1);
-    assert.ok(result.vectors[0] instanceof Float32Array);
-    const values = Array.from(result.vectors[0] ?? []);
-    const rounded = values.map((value) => Number(value.toFixed(3)));
-    assert.deepEqual(rounded, [0.1, 0.2, 0.3]);
-  } finally {
-    globalThis.fetch = originalFetch;
+  assert.equal(result.vectors.length, 2);
+  for (const vec of result.vectors) {
+    assert.ok(vec instanceof Float32Array);
+    assert.equal(vec.length, EMBEDDING_DIMS);
   }
 });
 
-test("embedTexts retries on failure", async () => {
-  process.env.AITOOLINGKEY = "test-key";
-  const mockFetch = createMockFetch([
-    { ok: false, status: 500, text: async () => "fail" },
-    { ok: false, status: 500, text: async () => "fail" },
-    { ok: true, json: async () => ({ data: [{ embedding: [0.4] }] }) },
-  ]);
+test("embedTexts returns empty array for empty input", async () => {
+  const result = await embedTexts([]);
 
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = mockFetch as unknown as typeof fetch;
-
-  try {
-    const result = await embedTexts(["retry"]);
-
-    assert.equal(result.vectors.length, 1);
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
+  assert.equal(result.vectors.length, 0);
+  assert.equal(result.error, undefined);
 });

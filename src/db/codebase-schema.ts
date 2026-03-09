@@ -48,7 +48,7 @@ export const applyCodebaseMigrations = (
       db.exec(
         `CREATE VIRTUAL TABLE IF NOT EXISTS code_vec USING vec0(
           chunk_id TEXT PRIMARY KEY,
-          embedding float[512]
+          embedding float[384]
         );`,
       );
     } catch {

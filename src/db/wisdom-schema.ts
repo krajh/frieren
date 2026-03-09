@@ -39,7 +39,7 @@ export const applyWisdomMigrations = (
       db.exec(
         `CREATE VIRTUAL TABLE IF NOT EXISTS wisdom_vec USING vec0(
           entry_id TEXT PRIMARY KEY,
-          embedding FLOAT[512]
+          embedding FLOAT[384]
         )`,
       );
     } catch {

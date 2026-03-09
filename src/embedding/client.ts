@@ -1,57 +1,43 @@
-import { loadConfig } from "../config.js";
-import { withRetry } from "./retry.js";
+import { pipeline } from "@xenova/transformers";
 
 export type EmbeddingResponse = {
   vectors: Float32Array[];
   error?: string;
 };
 
-type LiteLlmEmbeddingResponse = {
-  data: Array<{ embedding: number[] }>;
-};
+const MODEL = "Xenova/all-MiniLM-L6-v2";
+export const EMBEDDING_DIMS = 384;
 
-const toFloat32Array = (values: number[]): Float32Array => {
-  return Float32Array.from(values);
+type LocalPipeline = (
+  inputs: string | string[],
+  options?: { pooling?: string; normalize?: boolean },
+) => Promise<{ data: Float32Array }>;
+
+let _extractor: LocalPipeline | null = null;
+
+const getExtractor = async (): Promise<LocalPipeline> => {
+  if (!_extractor) {
+    _extractor = (await pipeline("feature-extraction", MODEL, {
+      quantized: true,
+    })) as unknown as LocalPipeline;
+  }
+  return _extractor;
 };
 
 export const embedTexts = async (
   inputs: string[],
 ): Promise<EmbeddingResponse> => {
-  if (inputs.length === 0) {
-    return { vectors: [] };
-  }
-
-  const config = loadConfig();
+  if (inputs.length === 0) return { vectors: [] };
 
   try {
-    const response = await withRetry(async () => {
-      const result = await fetch(`${config.litellm.baseUrl}/v1/embeddings`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${config.litellm.apiKey}`,
-        },
-        body: JSON.stringify({
-          model: config.litellm.embeddingModel,
-          input: inputs,
-          dimensions: 512,
-        }),
-      });
-
-      if (!result.ok) {
-        const text = await result.text();
-        throw new Error(`LiteLLM error (${result.status}): ${text}`);
-      }
-
-      return (await result.json()) as LiteLlmEmbeddingResponse;
-    });
-
-    const vectors = response.data.map((item) => toFloat32Array(item.embedding));
-
+    const extractor = await getExtractor();
+    const output = await extractor(inputs, { pooling: "mean", normalize: true });
+    const vectors: Float32Array[] = inputs.map((_, i) =>
+      output.data.slice(i * EMBEDDING_DIMS, (i + 1) * EMBEDDING_DIMS),
+    );
     return { vectors };
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Embedding request failed";
+    const message = error instanceof Error ? error.message : "Embedding failed";
     return { vectors: [], error: message };
   }
 };

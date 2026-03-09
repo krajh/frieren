@@ -40,7 +40,7 @@ export const applySessionMigrations = (
       db.exec(
         `CREATE VIRTUAL TABLE IF NOT EXISTS session_vec USING vec0(
           event_id TEXT PRIMARY KEY,
-          embedding FLOAT[512]
+          embedding FLOAT[384]
         )`,
       );
     } catch {
