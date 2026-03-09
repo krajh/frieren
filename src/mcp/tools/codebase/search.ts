@@ -36,6 +36,10 @@ export const registerCodebaseSearchTool = (server: McpServer): void => {
           .string()
           .optional()
           .describe("Project ID (auto-detected if omitted)"),
+        root_path: z
+          .string()
+          .optional()
+          .describe("Project root path (auto-detected from git if omitted)"),
         file_filter: z
           .string()
           .optional()
@@ -57,7 +61,7 @@ export const registerCodebaseSearchTool = (server: McpServer): void => {
       const { query, file_filter, chunk_type, limit = 10 } = args;
 
       const resolvedProjectId =
-        args.project_id ?? detectProjectId() ?? "unknown";
+        args.project_id ?? detectProjectId(args.root_path) ?? "unknown";
       const { db, vecLoaded } = initDb("index", resolvedProjectId);
       applyCodebaseMigrations(db, vecLoaded);
 
