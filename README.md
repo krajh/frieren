@@ -1,5 +1,7 @@
 # Frieren
 
+![Frieren](https://media1.tenor.com/m/1BPps-lkpKEAAAAC/frieren-frieren-beyond-journey's-end.gif)
+
 Frieren is a local MCP (Model Context Protocol) memory server for AI agents. It gives agents persistent memory across three planes — **Wisdom**, **Session**, and **Codebase** — so they can recall decisions, prior context, and code structure across sessions.
 
 **Fully local. No API keys. No external services.** Embeddings run on-device via a quantized [MiniLM-L6-v2](https://huggingface.co/Xenova/all-MiniLM-L6-v2) model (~23 MB, auto-downloaded on first run).
