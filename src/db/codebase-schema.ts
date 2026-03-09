@@ -39,6 +39,10 @@ export const applyCodebaseMigrations = (
   db: Database,
   vecLoaded: boolean,
 ): void => {
+  for (const stmt of CODEBASE_SCHEMA) {
+    db.exec(stmt);
+  }
+
   if (vecLoaded) {
     try {
       db.exec(

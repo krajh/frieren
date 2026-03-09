@@ -35,7 +35,7 @@ const safeLoadVec = (db: Database): InitResult => {
     return { db, vecLoaded: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown error";
-    console.warn(`[frieren] sqlite-vec extension not loaded: ${message}`);
+
     return { db, vecLoaded: false, vecError: message };
   }
 };
