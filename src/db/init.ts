@@ -45,6 +45,7 @@ export const initDb = (kind: DbKind, projectId?: string): InitResult => {
 
   if (kind === "wisdom") {
     const db = new Database(getWisdomDbPath());
+    db.exec("PRAGMA journal_mode=WAL");
     const vec = safeLoadVec(db);
     applySchema(db, WISDOM_SCHEMA);
     applyWisdomMigrations(db, vec.vecLoaded);
@@ -58,6 +59,7 @@ export const initDb = (kind: DbKind, projectId?: string): InitResult => {
   if (kind === "session") {
     ensureDir(getSessionsDir());
     const db = new Database(getSessionDbPath(projectId));
+    db.exec("PRAGMA journal_mode=WAL");
     const vec = safeLoadVec(db);
     applySessionMigrations(db, vec.vecLoaded);
     return vec;
@@ -65,6 +67,7 @@ export const initDb = (kind: DbKind, projectId?: string): InitResult => {
 
   ensureDir(getIndexDir());
   const db = new Database(getIndexDbPath(projectId));
+  db.exec("PRAGMA journal_mode=WAL");
   const vec = safeLoadVec(db);
   applySchema(db, INDEX_SCHEMA);
   applyCodebaseMigrations(db, vec.vecLoaded);
