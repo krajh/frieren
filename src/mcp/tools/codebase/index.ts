@@ -73,10 +73,10 @@ export const registerCodebaseIndexTool = (server: McpServer): void => {
       const start = Date.now();
       const { force = false } = args;
 
-      const resolvedProjectId =
-        args.project_id ?? detectProjectId() ?? "unknown";
       const resolvedRoot =
         args.root_path ?? getGitRoot(process.cwd()) ?? process.cwd();
+      const resolvedProjectId =
+        args.project_id ?? detectProjectId(resolvedRoot) ?? "unknown";
 
       const { db, vecLoaded } = initDb("index", resolvedProjectId);
       applyCodebaseMigrations(db, vecLoaded);
