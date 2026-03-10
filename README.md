@@ -80,8 +80,7 @@ Add to your project's `opencode.json` or global `~/.config/opencode/opencode.jso
   "mcp": {
     "frieren": {
       "type": "local",
-      "command": "bun",
-      "args": ["/absolute/path/to/frieren/src/index.ts"],
+      "command": ["bun", "/absolute/path/to/frieren/src/index.ts"],
       "enabled": true
     }
   }
@@ -89,6 +88,8 @@ Add to your project's `opencode.json` or global `~/.config/opencode/opencode.jso
 ```
 
 > Replace `/absolute/path/to/frieren` with the actual path to your clone. Run `pwd` inside the repo directory to get it.
+>
+> **Note:** The `command` field must be an array — `["bun", "/path"]`. The `command`/`args` split format is not valid for OpenCode's MCP schema.
 
 ## Usage Patterns
 
@@ -154,3 +155,25 @@ bun test              # Run all tests
 bunx tsc --noEmit     # Type check
 bun src/index.ts      # Start the server
 ```
+
+## Troubleshooting
+
+**`Cannot find module '../build/Release/sharp-linux-x64.node'` (Linux)**
+
+`@xenova/transformers` pulls in `sharp` as a transitive dependency. On Linux, `bun install` does not build native bindings by default. Fix it by installing the prebuilt binary explicitly:
+
+```bash
+npm install --platform=linux --arch=x64 sharp@0.32.6
+```
+
+This installs the pre-built Linux x64 binary without requiring C++ build tools. Run it once after `bun install` — no rebuild needed on subsequent starts.
+
+**Tools not appearing after config**
+
+- Restart OpenCode fully (MCP servers connect at startup)
+- Verify the path resolves: `bun /absolute/path/to/frieren/src/index.ts`
+- Confirm `command` in `opencode.json` is an array: `["bun", "/path/to/src/index.ts"]`
+
+**Codebase search returns no results**
+
+Run `frieren_codebase_index({})` once to build the initial index. Re-index after large refactors with `frieren_codebase_index({ force: true })`.
