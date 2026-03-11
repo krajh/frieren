@@ -29,6 +29,7 @@ Frieren is a local MCP (Model Context Protocol) memory server for AI agents. It 
 | `memory_search`    | Unified search across all three planes with GraphRAG scoring |
 | `memory_history`   | Cross-plane chronological timeline for an entity             |
 | `frieren_status`   | Report storage stats and health across all planes            |
+| `frieren_update`   | Pull the latest Frieren updates from git and reinstall deps  |
 
 ## Installation
 
@@ -147,6 +148,14 @@ Projects are identified automatically by git remote URL. No manual configuration
 | Protocol   | [MCP](https://modelcontextprotocol.io) (stdio)                    |
 | Storage    | SQLite (`bun:sqlite` + `sqlite-vec`)                              |
 | Embeddings | `Xenova/all-MiniLM-L6-v2` (local, 384-dim, quantized, no API key) |
+
+## Updating
+
+```bash
+bun run update
+```
+
+Pulls the latest changes from git and reinstalls dependencies. If you're connected via MCP, you can also call the `frieren_update` tool directly from your AI assistant — it runs the same steps and returns structured output. Either way, **restart the MCP server** after updating for changes to take effect.
 
 ## Development
 
