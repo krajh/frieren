@@ -12,6 +12,7 @@ import { registerCodebaseSearchTool } from "./mcp/tools/codebase/search.js";
 import { registerCodebaseGraphTool } from "./mcp/tools/codebase/graph.js";
 import { registerMemorySearchTool } from "./mcp/tools/unified/search.js";
 import { registerMemoryHistoryTool } from "./mcp/tools/unified/history.js";
+import { registerUpdateTool } from "./mcp/tools/update.js";
 
 export const createServer = async (): Promise<void> => {
   const server = new McpServer(
@@ -37,6 +38,7 @@ export const createServer = async (): Promise<void> => {
   registerCodebaseGraphTool(server);
   registerMemorySearchTool(server);
   registerMemoryHistoryTool(server);
+  registerUpdateTool(server);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

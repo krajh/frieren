@@ -129,8 +129,20 @@ export const registerCodebaseIndexTool = (server: McpServer): void => {
 
           const { chunks, deps } = chunkCode(content, relFile);
 
-          for (const chunk of chunks) {
-            const chunkId = crypto.randomUUID();
+          // Assign IDs upfront so we can batch-embed all chunks for this file
+          // in a single inference call rather than one call per chunk.
+          const chunkIds = chunks.map(() => crypto.randomUUID());
+          let fileVectors: Float32Array[] = [];
+          if (vecLoaded && chunks.length > 0) {
+            const { vectors, error } = await embedTexts(
+              chunks.map((c) => c.content),
+            );
+            if (!error) fileVectors = vectors;
+          }
+
+          for (let ci = 0; ci < chunks.length; ci++) {
+            const chunk = chunks[ci]!;
+            const chunkId = chunkIds[ci]!;
             db.run(
               `INSERT INTO code_chunks (id, project_id, file_path, chunk_type, name, content, start_line, end_line, language, indexed_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -149,17 +161,15 @@ export const registerCodebaseIndexTool = (server: McpServer): void => {
             );
             chunksCreated++;
 
-            if (vecLoaded) {
-              const { vectors, error } = await embedTexts([chunk.content]);
-              if (!error && vectors[0]) {
-                try {
-                  db.run(
-                    `INSERT OR REPLACE INTO code_vec(chunk_id, embedding) VALUES (?, ?)`,
-                    [chunkId, new Uint8Array(vectors[0].buffer)],
-                  );
-                } catch {
-                  // vec insert failure is non-fatal
-                }
+            const vec = fileVectors[ci];
+            if (vec) {
+              try {
+                db.run(
+                  `INSERT OR REPLACE INTO code_vec(chunk_id, embedding) VALUES (?, ?)`,
+                  [chunkId, new Uint8Array(vec.buffer)],
+                );
+              } catch {
+                // vec insert failure is non-fatal
               }
             }
           }
