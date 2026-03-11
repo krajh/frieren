@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "start": "bun src/index.ts",
+    "update": "git pull && bun install",
     "test": "bun test --pass-with-no-tests",
     "typecheck": "bunx tsc --noEmit --pretty false"
   },
