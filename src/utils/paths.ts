@@ -16,3 +16,6 @@ export const getIndexDir = (): string => join(getStorageHome(), "index");
 
 export const getIndexDbPath = (projectId: string): string =>
   join(getIndexDir(), `${projectId}.db`);
+
+export const getQueueDbPath = (): string =>
+  join(getStorageHome(), "queue.db");

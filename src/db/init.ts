@@ -5,6 +5,7 @@ import { ensureDir } from "../utils/fs.js";
 import {
   getIndexDbPath,
   getIndexDir,
+  getQueueDbPath,
   getSessionDbPath,
   getSessionsDir,
   getStorageHome,
@@ -12,10 +13,11 @@ import {
 } from "../utils/paths.js";
 import { INDEX_SCHEMA, WISDOM_SCHEMA } from "./schema.js";
 import { applyCodebaseMigrations } from "./codebase-schema.js";
+import { applyQueueMigrations } from "./queue-schema.js";
 import { applySessionMigrations } from "./session-schema.js";
 import { applyWisdomMigrations } from "./wisdom-schema.js";
 
-export type DbKind = "wisdom" | "session" | "index";
+export type DbKind = "wisdom" | "session" | "index" | "queue";
 
 type InitResult = {
   db: Database;
@@ -50,6 +52,14 @@ export const initDb = (kind: DbKind, projectId?: string): InitResult => {
     applySchema(db, WISDOM_SCHEMA);
     applyWisdomMigrations(db, vec.vecLoaded);
     return vec;
+  }
+
+  if (kind === "queue") {
+    const db = new Database(getQueueDbPath());
+    db.exec("PRAGMA journal_mode=WAL");
+    db.exec("PRAGMA busy_timeout=5000");
+    applyQueueMigrations(db);
+    return { db, vecLoaded: false };
   }
 
   if (!projectId) {

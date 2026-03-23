@@ -13,6 +13,13 @@ import { registerCodebaseGraphTool } from "./mcp/tools/codebase/graph.js";
 import { registerMemorySearchTool } from "./mcp/tools/unified/search.js";
 import { registerMemoryHistoryTool } from "./mcp/tools/unified/history.js";
 import { registerUpdateTool } from "./mcp/tools/update.js";
+import { registerReaperEnqueueTool } from "./mcp/tools/reaper/enqueue.js";
+import { registerReaperDequeueTool } from "./mcp/tools/reaper/dequeue.js";
+import { registerReaperHeartbeatTool } from "./mcp/tools/reaper/heartbeat.js";
+import { registerReaperCompleteTool } from "./mcp/tools/reaper/complete.js";
+import { registerReaperFailTool } from "./mcp/tools/reaper/fail.js";
+import { registerReaperStatusTool } from "./mcp/tools/reaper/status.js";
+import { registerReaperCancelTool } from "./mcp/tools/reaper/cancel.js";
 
 export const createServer = async (): Promise<void> => {
   const server = new McpServer(
@@ -39,6 +46,14 @@ export const createServer = async (): Promise<void> => {
   registerMemorySearchTool(server);
   registerMemoryHistoryTool(server);
   registerUpdateTool(server);
+
+  registerReaperEnqueueTool(server);
+  registerReaperDequeueTool(server);
+  registerReaperHeartbeatTool(server);
+  registerReaperCompleteTool(server);
+  registerReaperFailTool(server);
+  registerReaperStatusTool(server);
+  registerReaperCancelTool(server);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
