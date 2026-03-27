@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -14,6 +14,7 @@ import {
   getGitRoot,
 } from "../../../codebase/diff.js";
 import { chunkCode, shouldSkipFile } from "../../../codebase/indexer.js";
+import { extractAbstract, extractSummary } from "../../../tiering/extract.js";
 
 const collectFiles = (dir: string, rootPath: string): string[] => {
   const result: string[] = [];
@@ -110,6 +111,17 @@ export const registerCodebaseIndexTool = (server: McpServer): void => {
 
         for (const relFile of filesToIndex) {
           const fullPath = join(resolvedRoot, relFile);
+          const dirPath = dirname(relFile);
+
+          if (vecLoaded) {
+            db.run(
+              `DELETE FROM code_vec
+               WHERE chunk_id IN (
+                 SELECT id FROM code_chunks WHERE project_id = ? AND file_path = ?
+               )`,
+              [resolvedProjectId, relFile],
+            );
+          }
 
           db.run(
             `DELETE FROM code_chunks WHERE project_id = ? AND file_path = ?`,
@@ -143,16 +155,24 @@ export const registerCodebaseIndexTool = (server: McpServer): void => {
           for (let ci = 0; ci < chunks.length; ci++) {
             const chunk = chunks[ci]!;
             const chunkId = chunkIds[ci]!;
+            const abstract = extractAbstract(chunk.content, "code", {
+              chunkType: chunk.chunk_type,
+              name: chunk.name ?? undefined,
+            });
+            const summary = extractSummary(chunk.content, "code");
             db.run(
-              `INSERT INTO code_chunks (id, project_id, file_path, chunk_type, name, content, start_line, end_line, language, indexed_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              `INSERT INTO code_chunks (id, project_id, file_path, dir_path, chunk_type, name, content, abstract, summary, start_line, end_line, language, indexed_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               [
                 chunkId,
                 resolvedProjectId,
                 relFile,
+                dirPath,
                 chunk.chunk_type,
                 chunk.name ?? null,
                 chunk.content,
+                abstract,
+                summary,
                 chunk.start_line,
                 chunk.end_line,
                 chunk.language,
@@ -187,6 +207,104 @@ export const registerCodebaseIndexTool = (server: McpServer): void => {
                 now,
               ],
             );
+          }
+        }
+
+        if (vecLoaded) {
+          db.run(
+            `DELETE FROM dir_vec WHERE dir_key IN (
+               SELECT project_id || '::' || dir_path
+               FROM dir_summaries
+               WHERE project_id = ?
+             )`,
+            [resolvedProjectId],
+          );
+        }
+
+        type DirSummaryRow = {
+          dir_path: string | null;
+          file_count: number;
+          chunk_count: number;
+          names: string | null;
+        };
+
+        const dirRows = db
+          .query<DirSummaryRow, [string]>(
+            `SELECT
+               dir_path,
+               COUNT(DISTINCT file_path) AS file_count,
+               COUNT(*) AS chunk_count,
+               GROUP_CONCAT(name, ', ') AS names
+             FROM code_chunks
+             WHERE project_id = ?
+             GROUP BY dir_path`,
+          )
+          .all(resolvedProjectId);
+
+        db.run(`DELETE FROM dir_summaries WHERE project_id = ?`, [
+          resolvedProjectId,
+        ]);
+
+        const dirPayload = dirRows.map((row) => {
+          const safeDirPath = row.dir_path ?? ".";
+          const nameList = (row.names ?? "")
+            .split(",")
+            .map((name) => name.trim())
+            .filter(Boolean)
+            .slice(0, 24)
+            .join(", ");
+          const summary =
+            `dir: ${safeDirPath} | ${row.file_count} files, ${row.chunk_count} chunks: ${nameList}`.slice(
+              0,
+              1200,
+            );
+          return {
+            dir_path: safeDirPath,
+            file_count: row.file_count,
+            chunk_count: row.chunk_count,
+            summary,
+          };
+        });
+
+        let dirVectors: Float32Array[] = [];
+        if (vecLoaded && dirPayload.length > 0) {
+          const { vectors, error } = await embedTexts(
+            dirPayload.map((row) => row.summary),
+          );
+          if (!error) {
+            dirVectors = vectors;
+          }
+        }
+
+        for (let i = 0; i < dirPayload.length; i++) {
+          const row = dirPayload[i]!;
+          const dirKey = `${resolvedProjectId}::${row.dir_path}`;
+          const embedding = dirVectors[i]
+            ? new Uint8Array(dirVectors[i]!.buffer)
+            : null;
+          db.run(
+            `INSERT OR REPLACE INTO dir_summaries
+               (dir_path, project_id, file_count, chunk_count, summary, embedding)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [
+              row.dir_path,
+              resolvedProjectId,
+              row.file_count,
+              row.chunk_count,
+              row.summary,
+              embedding,
+            ],
+          );
+
+          if (embedding) {
+            try {
+              db.run(
+                `INSERT OR REPLACE INTO dir_vec (dir_key, embedding) VALUES (?, ?)`,
+                [dirKey, embedding],
+              );
+            } catch {
+              // vec insert failure is non-fatal
+            }
           }
         }
 

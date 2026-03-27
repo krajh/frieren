@@ -3,13 +3,38 @@ import { z } from "zod";
 
 import { embedTexts } from "../../../embedding/client.js";
 import { initDb } from "../../../db/init.js";
+import {
+  createEmptyTrajectory,
+  writeRetrievalLog,
+} from "../debug/retrieval-log.js";
 
 const WISDOM_TYPES = ["decision", "pattern", "constraint", "issue"] as const;
+const FIDELITY_LEVELS = ["L0", "L1", "L2"] as const;
+type Fidelity = (typeof FIDELITY_LEVELS)[number];
+
+const renderByFidelity = (
+  content: string,
+  abstract: string | null,
+  summary: string | null,
+  fidelity: Fidelity,
+): string => {
+  if (fidelity === "L0") {
+    return abstract ?? content.slice(0, 150);
+  }
+
+  if (fidelity === "L1") {
+    return summary ?? content.slice(0, 500);
+  }
+
+  return content;
+};
 
 type WisdomRow = {
   id: string;
   type: string;
   content: string;
+  abstract: string | null;
+  summary: string | null;
   confidence: number;
   evidence: string | null;
   project_id: string | null;
@@ -41,14 +66,31 @@ export const registerWisdomSearchTool = (server: McpServer): void => {
           .max(100)
           .optional()
           .describe("Max results (default 10)"),
+        fidelity: z
+          .enum(FIDELITY_LEVELS)
+          .optional()
+          .describe("Response fidelity: L0=abstract, L1=summary, L2=full"),
+        debug: z
+          .boolean()
+          .optional()
+          .describe("Include retrieval trajectory in response"),
       },
     },
     async (args) => {
-      const { query, type_filter, project_id, limit = 10 } = args;
+      const startedAt = performance.now();
+      const {
+        query,
+        type_filter,
+        project_id,
+        limit = 10,
+        fidelity = "L1",
+        debug = false,
+      } = args;
 
       const { db, vecLoaded } = initDb("wisdom");
 
       let results: SearchResult[] = [];
+      const trajectory = createEmptyTrajectory();
 
       if (vecLoaded) {
         const { vectors, error } = await embedTexts([query]);
@@ -75,7 +117,8 @@ export const registerWisdomSearchTool = (server: McpServer): void => {
             const rows = db
               .query<WisdomRow & { distance: number }, typeof params>(
                 `SELECT we.id, we.type, we.content, we.confidence,
-                        we.evidence, we.project_id, we.tags, we.status,
+                        we.abstract, we.summary, we.evidence,
+                        we.project_id, we.tags, we.status,
                         we.created_at, we.updated_at, vd.distance
                  FROM wisdom_vec vd
                  JOIN wisdom_entries we ON we.id = vd.entry_id
@@ -89,6 +132,15 @@ export const registerWisdomSearchTool = (server: McpServer): void => {
               ...r,
               score: 1 - r.distance,
             }));
+
+            trajectory.vector_hits.push(
+              ...results.map((r) => ({
+                id: r.id,
+                score: r.score,
+                plane: "wisdom" as const,
+                source: "vector" as const,
+              })),
+            );
           } catch {
             // vec search failed — fall through to keyword search
           }
@@ -112,7 +164,7 @@ export const registerWisdomSearchTool = (server: McpServer): void => {
         const rows = db
           .query<WisdomRow, typeof params>(
             `SELECT id, type, content, confidence, evidence, project_id,
-                    tags, status, created_at, updated_at
+                    abstract, summary, tags, status, created_at, updated_at
              FROM wisdom_entries
              WHERE ${conditions.join(" AND ")}
              LIMIT ?`,
@@ -120,7 +172,46 @@ export const registerWisdomSearchTool = (server: McpServer): void => {
           .all(...params);
 
         results = rows.map((r) => ({ ...r, score: 0.5 }));
+
+        trajectory.keyword_hits.push(
+          ...results.map((r) => ({
+            id: r.id,
+            score: r.score,
+            plane: "wisdom" as const,
+            source: "keyword" as const,
+          })),
+        );
       }
+
+      const finalResults = results;
+      const fidelityResults = finalResults.map((result) => ({
+        ...result,
+        content: renderByFidelity(
+          result.content,
+          result.abstract,
+          result.summary,
+          fidelity,
+        ),
+      }));
+      trajectory.final_results = finalResults.map((r) => ({
+        id: r.id,
+        score: r.score,
+        plane: "wisdom",
+        source: trajectory.vector_hits.some((hit) => hit.id === r.id)
+          ? "vector"
+          : trajectory.keyword_hits.some((hit) => hit.id === r.id)
+            ? "keyword"
+            : "graph",
+      }));
+
+      writeRetrievalLog({
+        query,
+        planesSearched: ["wisdom"],
+        resultsCount: trajectory.final_results.length,
+        graphExpansions: trajectory.graph_expansions.length,
+        trajectory,
+        durationMs: performance.now() - startedAt,
+      });
 
       db.close();
 
@@ -128,7 +219,14 @@ export const registerWisdomSearchTool = (server: McpServer): void => {
         content: [
           {
             type: "text",
-            text: JSON.stringify(results),
+            text: JSON.stringify(
+              debug
+                ? {
+                    results: fidelityResults,
+                    trajectory,
+                  }
+                : fidelityResults,
+            ),
           },
         ],
       };

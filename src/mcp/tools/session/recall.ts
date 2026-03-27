@@ -11,11 +11,33 @@ type EventRow = {
   project_id: string;
   event_type: string;
   content: string;
+  abstract: string | null;
+  summary: string | null;
   artifacts: string | null;
   created_at: string;
 };
 
 type ScoredEvent = EventRow & { score: number };
+
+const FIDELITY_LEVELS = ["L0", "L1", "L2"] as const;
+type Fidelity = (typeof FIDELITY_LEVELS)[number];
+
+const renderByFidelity = (
+  content: string,
+  abstract: string | null,
+  summary: string | null,
+  fidelity: Fidelity,
+): string => {
+  if (fidelity === "L0") {
+    return abstract ?? content.slice(0, 150);
+  }
+
+  if (fidelity === "L1") {
+    return summary ?? content.slice(0, 500);
+  }
+
+  return content;
+};
 
 export const registerSessionRecallTool = (server: McpServer): void => {
   server.registerTool(
@@ -45,10 +67,21 @@ export const registerSessionRecallTool = (server: McpServer): void => {
           .max(100)
           .optional()
           .describe("Maximum results (default 20)"),
+        fidelity: z
+          .enum(FIDELITY_LEVELS)
+          .optional()
+          .describe("Response fidelity: L0=abstract, L1=summary, L2=full"),
       },
     },
     async (args) => {
-      const { query, session_id, project_id, since, limit = 20 } = args;
+      const {
+        query,
+        session_id,
+        project_id,
+        since,
+        limit = 20,
+        fidelity = "L1",
+      } = args;
 
       const resolvedProjectId = project_id ?? detectProjectId() ?? "unknown";
       const { db, vecLoaded } = initDb("session", resolvedProjectId);
@@ -74,7 +107,7 @@ export const registerSessionRecallTool = (server: McpServer): void => {
               );
 
               const placeholders = ids.map(() => "?").join(",");
-              let sql = `SELECT * FROM session_events WHERE id IN (${placeholders})`;
+              let sql = `SELECT id, session_id, project_id, event_type, content, abstract, summary, artifacts, created_at FROM session_events WHERE id IN (${placeholders})`;
               const params: (string | number)[] = [...ids];
 
               if (session_id) {
@@ -102,7 +135,7 @@ export const registerSessionRecallTool = (server: McpServer): void => {
 
       // Keyword fallback (also used when vec returns no results)
       if (results.length === 0) {
-        let sql = `SELECT * FROM session_events WHERE content LIKE ? AND project_id = ?`;
+        let sql = `SELECT id, session_id, project_id, event_type, content, abstract, summary, artifacts, created_at FROM session_events WHERE content LIKE ? AND project_id = ?`;
         const params: (string | number)[] = [`%${query}%`, resolvedProjectId];
 
         if (session_id) {
@@ -125,11 +158,21 @@ export const registerSessionRecallTool = (server: McpServer): void => {
 
       db.close();
 
+      const fidelityResults = results.map((result) => ({
+        ...result,
+        content: renderByFidelity(
+          result.content,
+          result.abstract,
+          result.summary,
+          fidelity,
+        ),
+      }));
+
       return {
         content: [
           {
             type: "text",
-            text: JSON.stringify(results),
+            text: JSON.stringify(fidelityResults),
           },
         ],
       };

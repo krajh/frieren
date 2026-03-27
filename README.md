@@ -8,28 +8,31 @@ Frieren is a local MCP (Model Context Protocol) memory server for AI agents. It 
 
 ## The Three Planes
 
-| Plane        | What it stores                                                         | Scope           |
-| ------------ | ---------------------------------------------------------------------- | --------------- |
-| **Wisdom**   | Durable facts, decisions, patterns, and relationships between concepts | Global          |
-| **Session**  | Per-session observations, agent episodes, and ephemeral context        | Per-project     |
-| **Codebase** | Indexed source files, symbols, and dependency graphs                   | Per-project     |
+| Plane        | What it stores                                                         | Scope       |
+| ------------ | ---------------------------------------------------------------------- | ----------- |
+| **Wisdom**   | Durable facts, decisions, patterns, and relationships between concepts | Global      |
+| **Session**  | Per-session observations, agent episodes, and ephemeral context        | Per-project |
+| **Codebase** | Indexed source files, symbols, and dependency graphs                   | Per-project |
 
 ## Tools
 
-| Tool               | Description                                                  |
-| ------------------ | ------------------------------------------------------------ |
-| `wisdom_write`     | Store a durable fact or decision in the wisdom plane         |
-| `wisdom_search`    | Search wisdom entries by semantic similarity or keyword      |
-| `wisdom_relate`    | Create a typed relationship between two wisdom entries       |
-| `session_write`    | Write an observation or episode to the current session       |
-| `session_recall`   | Retrieve recent session context by query or entity           |
-| `codebase_index`   | Index a local repository (full or incremental via git diff)  |
-| `codebase_search`  | Search indexed code by semantic similarity or keyword        |
-| `codebase_graph`   | BFS traversal of file/symbol dependency graph                |
-| `memory_search`    | Unified search across all three planes with GraphRAG scoring |
-| `memory_history`   | Cross-plane chronological timeline for an entity             |
-| `frieren_status`   | Report storage stats and health across all planes            |
-| `frieren_update`   | Pull the latest Frieren updates from git and reinstall deps  |
+| Tool              | Description                                                        |
+| ----------------- | ------------------------------------------------------------------ |
+| `wisdom_write`    | Store a durable fact or decision in the wisdom plane               |
+| `wisdom_search`   | Search wisdom entries by semantic similarity or keyword            |
+| `wisdom_relate`   | Create a typed relationship between two wisdom entries             |
+| `session_write`   | Write an observation or episode to the current session             |
+| `session_recall`  | Retrieve recent session context by query or entity                 |
+| `codebase_index`  | Index a local repository (full or incremental via git diff)        |
+| `codebase_search` | Search indexed code by semantic similarity or keyword              |
+| `codebase_graph`  | BFS traversal of file/symbol dependency graph                      |
+| `memory_search`   | Unified search across all three planes with GraphRAG scoring       |
+| `memory_browse`   | Deterministic memory navigation — `ls`, `tree`, `stat`, `find` ops |
+| `memory_commit`   | Auto-extract recurring session patterns and promote to wisdom      |
+| `memory_history`  | Cross-plane chronological timeline for an entity                   |
+| `retrieval_debug` | Query retrieval trajectory logs to diagnose search quality         |
+| `frieren_status`  | Report storage stats and health across all planes                  |
+| `frieren_update`  | Pull the latest Frieren updates from git and reinstall deps        |
 
 ## Installation
 
@@ -92,6 +95,46 @@ Add to your project's `opencode.json` or global `~/.config/opencode/opencode.jso
 >
 > **Note:** The `command` field must be an array — `["bun", "/path"]`. The `command`/`args` split format is not valid for OpenCode's MCP schema.
 
+## Features
+
+### Tiered Context Loading (L0/L1/L2)
+
+Every search result can be returned at three fidelity levels, controlled by the `fidelity` parameter:
+
+| Level | Content           | Use case                                  |
+| ----- | ----------------- | ----------------------------------------- |
+| `L0`  | One-line abstract | Quick relevance scanning — minimal tokens |
+| `L1`  | Paragraph summary | Planning and decision-making (default)    |
+| `L2`  | Full content      | Deep reads when you need exact details    |
+
+Agents can scan `L0` for breadth across many results, then drill to `L2` only for the few that matter. This dramatically reduces token waste on irrelevant results.
+
+### Directory-Aware Codebase Retrieval
+
+`codebase_search` and `memory_search` use a two-phase approach when `directory_first: true` (default):
+
+1. **Phase 1** — Vector search across directory summaries to find the top-3 most relevant directories
+2. **Phase 2** — Vector search scoped to those directories for precise, structurally coherent results
+
+Falls back to flat search automatically if directory scoring is inconclusive.
+
+### Memory Browse
+
+`memory_browse` provides deterministic navigation alongside semantic search:
+
+- **`ls`** — List entries in a plane, filterable by type, project, date, and tags
+- **`tree`** — Hierarchical directory view of the codebase plane with file/chunk counts
+- **`stat`** — Detailed metadata for a specific entry (all fields, relations, timestamps)
+- **`find`** — Regex pattern matching across content, tags, and file paths
+
+### Auto Memory Extraction
+
+`memory_commit` analyzes session events across recent sessions, clusters them by semantic similarity, and auto-promotes recurring patterns to durable wisdom entries. Use `dry_run: true` to preview candidates before writing.
+
+### Retrieval Trajectory Logging
+
+Every `memory_search` call logs its retrieval path (vector hits, keyword hits, graph expansions, directories visited). Use `retrieval_debug` to query these logs and diagnose why searches returned what they did. Pass `debug: true` to `memory_search` to include trajectory data in the response.
+
 ## Usage Patterns
 
 _This section is for LLM agents. It covers when to use which tool._
@@ -107,24 +150,29 @@ _This section is for LLM agents. It covers when to use which tool._
 - Log observations and tool events with `session_write`.
 - Store important decisions, constraints, or patterns with `wisdom_write` (these persist permanently).
 - Use `memory_search` to search across all planes at once when you need broad recall.
+- Use `memory_browse` to deterministically explore memory structure (`ls`, `tree`, `stat`, `find`).
 
 ### Ending a session
 
 - Review what happened with `session_recall`.
-- Promote key findings to the wisdom plane with `wisdom_write` so they survive the 60-day session window.
+- Run `memory_commit` to auto-extract recurring patterns and promote them to wisdom.
+- Promote any remaining key findings manually with `wisdom_write` so they survive the 60-day session window.
 
 ### Tool selection guide
 
-| I need to...                                | Use                |
-| ------------------------------------------- | ------------------ |
-| Remember a decision permanently             | `wisdom_write`     |
-| Find something I knew before                | `wisdom_search`    |
-| Log what I just did                         | `session_write`    |
-| Recall recent context for this project      | `session_recall`   |
-| Search everything at once                   | `memory_search`    |
-| Understand how a file fits into a codebase  | `codebase_graph`   |
-| Find code related to a concept              | `codebase_search`  |
-| See how an entity evolved over time         | `memory_history`   |
+| I need to...                               | Use               |
+| ------------------------------------------ | ----------------- |
+| Remember a decision permanently            | `wisdom_write`    |
+| Find something I knew before               | `wisdom_search`   |
+| Log what I just did                        | `session_write`   |
+| Recall recent context for this project     | `session_recall`  |
+| Search everything at once                  | `memory_search`   |
+| Understand how a file fits into a codebase | `codebase_graph`  |
+| Find code related to a concept             | `codebase_search` |
+| Browse memory structure deterministically  | `memory_browse`   |
+| Auto-promote session patterns to wisdom    | `memory_commit`   |
+| Diagnose why a search returned bad results | `retrieval_debug` |
+| See how an entity evolved over time        | `memory_history`  |
 
 ## Storage
 

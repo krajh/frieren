@@ -20,6 +20,9 @@ import { registerReaperCompleteTool } from "./mcp/tools/reaper/complete.js";
 import { registerReaperFailTool } from "./mcp/tools/reaper/fail.js";
 import { registerReaperStatusTool } from "./mcp/tools/reaper/status.js";
 import { registerReaperCancelTool } from "./mcp/tools/reaper/cancel.js";
+import { registerRetrievalDebugTool } from "./mcp/tools/debug/trajectory.js";
+import { registerMemoryBrowseTool } from "./mcp/tools/browse/browse.js";
+import { registerMemoryCommitTool } from "./mcp/tools/commit/commit.js";
 
 export const createServer = async (): Promise<void> => {
   const server = new McpServer(
@@ -45,6 +48,9 @@ export const createServer = async (): Promise<void> => {
   registerCodebaseGraphTool(server);
   registerMemorySearchTool(server);
   registerMemoryHistoryTool(server);
+  registerMemoryBrowseTool(server);
+  registerMemoryCommitTool(server);
+  registerRetrievalDebugTool(server);
   registerUpdateTool(server);
 
   registerReaperEnqueueTool(server);

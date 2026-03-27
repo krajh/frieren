@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { embedTexts } from "../../../embedding/client.js";
 import { initDb } from "../../../db/init.js";
+import { extractAbstract, extractSummary } from "../../../tiering/extract.js";
 
 const WISDOM_TYPES = ["decision", "pattern", "constraint", "issue"] as const;
 
@@ -50,23 +51,29 @@ export const registerWisdomWriteTool = (server: McpServer): void => {
       const now = new Date().toISOString();
       const evidenceJson = evidence ? JSON.stringify(evidence) : null;
       const tagsJson = tags ? JSON.stringify(tags) : null;
+      const abstract = extractAbstract(content, "text");
+      const summary = extractSummary(content, "text");
 
       db.run(
         `INSERT INTO wisdom_entries
-          (id, type, content, confidence, source_agent, evidence, tags, project_id, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (id, type, content, abstract, summary, confidence, source_agent, evidence, tags, project_id, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
-          content = excluded.content,
-          confidence = excluded.confidence,
-          evidence = excluded.evidence,
-          tags = excluded.tags,
-          project_id = excluded.project_id,
-          status = excluded.status,
+           content = excluded.content,
+           abstract = excluded.abstract,
+           summary = excluded.summary,
+           confidence = excluded.confidence,
+           evidence = excluded.evidence,
+           tags = excluded.tags,
+           project_id = excluded.project_id,
+           status = excluded.status,
           updated_at = excluded.updated_at`,
         [
           id,
           type,
           content,
+          abstract,
+          summary,
           confidence,
           "frieren",
           evidenceJson,

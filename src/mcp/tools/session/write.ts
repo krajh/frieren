@@ -4,6 +4,7 @@ import { z } from "zod";
 import { embedTexts } from "../../../embedding/client.js";
 import { initDb } from "../../../db/init.js";
 import { detectProjectId } from "../../../project/detectProjectId.js";
+import { extractAbstract, extractSummary } from "../../../tiering/extract.js";
 
 const EVENT_TYPES = [
   "tool_call",
@@ -76,16 +77,20 @@ export const registerSessionWriteTool = (server: McpServer): void => {
 
       const eventId = crypto.randomUUID();
       const artifactsJson = artifacts ? JSON.stringify(artifacts) : null;
+      const abstract = extractAbstract(content, "text");
+      const summary = extractSummary(content, "text");
 
       db.run(
-        `INSERT INTO session_events (id, session_id, project_id, event_type, content, artifacts, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO session_events (id, session_id, project_id, event_type, content, abstract, summary, artifacts, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           eventId,
           resolvedSessionId,
           resolvedProjectId,
           event_type,
           content,
+          abstract,
+          summary,
           artifactsJson,
           now,
         ],

@@ -14,6 +14,7 @@ import {
 import { INDEX_SCHEMA, WISDOM_SCHEMA } from "./schema.js";
 import { applyCodebaseMigrations } from "./codebase-schema.js";
 import { applyQueueMigrations } from "./queue-schema.js";
+import { applyRetrievalMigrations } from "./retrieval-schema.js";
 import { applySessionMigrations } from "./session-schema.js";
 import { applyWisdomMigrations } from "./wisdom-schema.js";
 
@@ -50,6 +51,7 @@ export const initDb = (kind: DbKind, projectId?: string): InitResult => {
     db.exec("PRAGMA journal_mode=WAL");
     const vec = safeLoadVec(db);
     applySchema(db, WISDOM_SCHEMA);
+    applyRetrievalMigrations(db);
     applyWisdomMigrations(db, vec.vecLoaded);
     return vec;
   }

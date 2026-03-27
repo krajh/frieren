@@ -30,6 +30,17 @@ export const applySessionMigrations = (
     db.exec(stmt);
   }
 
+  for (const [col, def] of [
+    ["abstract", "TEXT"],
+    ["summary", "TEXT"],
+  ] as const) {
+    try {
+      db.exec(`ALTER TABLE session_events ADD COLUMN ${col} ${def}`);
+    } catch {
+      // Column already exists — safe to continue
+    }
+  }
+
   // 60-day rolling retention cleanup
   db.exec(
     `DELETE FROM session_events WHERE created_at < datetime('now', '-60 days')`,

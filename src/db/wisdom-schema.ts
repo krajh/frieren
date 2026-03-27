@@ -16,6 +16,8 @@ export const WISDOM_V2_MIGRATIONS = [
 const ALT_COLUMNS: Array<[string, string]> = [
   ["project_id", "TEXT"],
   ["status", "TEXT DEFAULT 'active'"],
+  ["abstract", "TEXT"],
+  ["summary", "TEXT"],
 ];
 
 export const applyWisdomMigrations = (
