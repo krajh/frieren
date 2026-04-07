@@ -7,6 +7,7 @@ import { registerSessionRecallTool } from "./mcp/tools/session/recall.js";
 import { registerWisdomWriteTool } from "./mcp/tools/wisdom/write.js";
 import { registerWisdomSearchTool } from "./mcp/tools/wisdom/search.js";
 import { registerWisdomRelateTool } from "./mcp/tools/wisdom/relate.js";
+import { registerWakeupContextTool } from "./mcp/tools/wisdom/wakeup.js";
 import { registerCodebaseIndexTool } from "./mcp/tools/codebase/index.js";
 import { registerCodebaseSearchTool } from "./mcp/tools/codebase/search.js";
 import { registerCodebaseGraphTool } from "./mcp/tools/codebase/graph.js";
@@ -23,6 +24,17 @@ import { registerReaperCancelTool } from "./mcp/tools/reaper/cancel.js";
 import { registerRetrievalDebugTool } from "./mcp/tools/debug/trajectory.js";
 import { registerMemoryBrowseTool } from "./mcp/tools/browse/browse.js";
 import { registerMemoryCommitTool } from "./mcp/tools/commit/commit.js";
+import {
+  registerKgAddTool,
+  registerKgQueryTool,
+  registerKgInvalidateTool,
+  registerKgTimelineTool,
+} from "./mcp/tools/kg/kg.js";
+import { registerKgValidateTool } from "./mcp/tools/kg/validate.js";
+import {
+  registerDiaryWriteTool,
+  registerDiaryReadTool,
+} from "./mcp/tools/kg/diary.js";
 
 export const createServer = async (): Promise<void> => {
   const server = new McpServer(
@@ -43,6 +55,7 @@ export const createServer = async (): Promise<void> => {
   registerWisdomWriteTool(server);
   registerWisdomSearchTool(server);
   registerWisdomRelateTool(server);
+  registerWakeupContextTool(server);
   registerCodebaseIndexTool(server);
   registerCodebaseSearchTool(server);
   registerCodebaseGraphTool(server);
@@ -60,6 +73,14 @@ export const createServer = async (): Promise<void> => {
   registerReaperFailTool(server);
   registerReaperStatusTool(server);
   registerReaperCancelTool(server);
+
+  registerKgAddTool(server);
+  registerKgQueryTool(server);
+  registerKgInvalidateTool(server);
+  registerKgTimelineTool(server);
+  registerKgValidateTool(server);
+  registerDiaryWriteTool(server);
+  registerDiaryReadTool(server);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

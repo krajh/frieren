@@ -40,6 +40,9 @@ type WisdomRow = {
   project_id: string | null;
   tags: string | null;
   status: string | null;
+  realm: string | null;
+  suite: string | null;
+  kind: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -59,6 +62,21 @@ export const registerWisdomSearchTool = (server: McpServer): void => {
           .optional()
           .describe("Filter by wisdom type"),
         project_id: z.string().optional().describe("Filter by project ID"),
+        // OpenCode taxonomy filters
+        realm: z
+          .string()
+          .optional()
+          .describe("Filter by realm (top-level domain)"),
+        suite: z
+          .string()
+          .optional()
+          .describe("Filter by suite (group within realm)"),
+        kind: z
+          .string()
+          .optional()
+          .describe(
+            "Filter by kind (memory type: facts, events, discoveries, preferences, advice)",
+          ),
         limit: z
           .number()
           .int()
@@ -82,6 +100,9 @@ export const registerWisdomSearchTool = (server: McpServer): void => {
         query,
         type_filter,
         project_id,
+        realm,
+        suite,
+        kind,
         limit = 10,
         fidelity = "L1",
         debug = false,
@@ -109,6 +130,18 @@ export const registerWisdomSearchTool = (server: McpServer): void => {
             if (project_id) {
               conditions.push("we.project_id = ?");
               params.push(project_id);
+            }
+            if (realm) {
+              conditions.push("we.realm = ?");
+              params.push(realm);
+            }
+            if (suite) {
+              conditions.push("we.suite = ?");
+              params.push(suite);
+            }
+            if (kind) {
+              conditions.push("we.kind = ?");
+              params.push(kind);
             }
 
             const whereClause =
@@ -159,12 +192,24 @@ export const registerWisdomSearchTool = (server: McpServer): void => {
           conditions.push("project_id = ?");
           params.push(project_id);
         }
+        if (realm) {
+          conditions.push("realm = ?");
+          params.push(realm);
+        }
+        if (suite) {
+          conditions.push("suite = ?");
+          params.push(suite);
+        }
+        if (kind) {
+          conditions.push("kind = ?");
+          params.push(kind);
+        }
         params.push(limit);
 
         const rows = db
           .query<WisdomRow, typeof params>(
             `SELECT id, type, content, confidence, evidence, project_id,
-                    abstract, summary, tags, status, created_at, updated_at
+                    abstract, summary, tags, status, realm, suite, kind, created_at, updated_at
              FROM wisdom_entries
              WHERE ${conditions.join(" AND ")}
              LIMIT ?`,

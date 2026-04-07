@@ -33,6 +33,21 @@ export const registerWisdomWriteTool = (server: McpServer): void => {
           .array(z.string())
           .optional()
           .describe("Tags for classification"),
+        // Palace taxonomy fields
+        realm: z
+          .string()
+          .optional()
+          .describe("Realm: top-level domain (project, agent, topic)"),
+        suite: z
+          .string()
+          .optional()
+          .describe("Suite: group of related memories within realm"),
+        kind: z
+          .string()
+          .optional()
+          .describe(
+            "Kind: memory type (fact, event, discovery, preference, advice)",
+          ),
       },
     },
     async (args) => {
@@ -43,6 +58,9 @@ export const registerWisdomWriteTool = (server: McpServer): void => {
         evidence,
         project_id,
         tags,
+        realm,
+        suite,
+        kind,
       } = args;
 
       const { db, vecLoaded } = initDb("wisdom");
@@ -56,8 +74,8 @@ export const registerWisdomWriteTool = (server: McpServer): void => {
 
       db.run(
         `INSERT INTO wisdom_entries
-          (id, type, content, abstract, summary, confidence, source_agent, evidence, tags, project_id, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (id, type, content, abstract, summary, confidence, source_agent, evidence, tags, project_id, status, realm, suite, kind, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            content = excluded.content,
            abstract = excluded.abstract,
@@ -66,8 +84,11 @@ export const registerWisdomWriteTool = (server: McpServer): void => {
            evidence = excluded.evidence,
            tags = excluded.tags,
            project_id = excluded.project_id,
+           realm = excluded.realm,
+           suite = excluded.suite,
+           kind = excluded.kind,
            status = excluded.status,
-          updated_at = excluded.updated_at`,
+           updated_at = excluded.updated_at`,
         [
           id,
           type,
@@ -80,6 +101,9 @@ export const registerWisdomWriteTool = (server: McpServer): void => {
           tagsJson,
           project_id ?? null,
           "active",
+          realm ?? null,
+          suite ?? null,
+          kind ?? null,
           now,
           now,
         ],

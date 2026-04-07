@@ -11,6 +11,35 @@ export const WISDOM_V2_MIGRATIONS = [
   );`,
   `CREATE INDEX IF NOT EXISTS idx_wisdom_relations_from ON wisdom_relations(from_id);`,
   `CREATE INDEX IF NOT EXISTS idx_wisdom_relations_to ON wisdom_relations(to_id);`,
+  // Knowledge Graph: entity nodes
+  `CREATE TABLE IF NOT EXISTS kg_entities (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL,
+    attributes TEXT,
+    project_id TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );`,
+  `CREATE INDEX IF NOT EXISTS idx_kg_entities_name ON kg_entities(name);`,
+  `CREATE INDEX IF NOT EXISTS idx_kg_entities_type ON kg_entities(type);`,
+  // Knowledge Graph: temporal triples (subject, predicate, object, validity window)
+  `CREATE TABLE IF NOT EXISTS kg_triples (
+    id TEXT PRIMARY KEY,
+    subject_id TEXT NOT NULL REFERENCES kg_entities(id),
+    predicate TEXT NOT NULL,
+    object_id TEXT,
+    object_value TEXT,
+    valid_from TEXT NOT NULL,
+    valid_to TEXT,
+    confidence REAL DEFAULT 1.0,
+    source TEXT,
+    project_id TEXT,
+    created_at TEXT NOT NULL
+  );`,
+  `CREATE INDEX IF NOT EXISTS idx_kg_triples_subject ON kg_triples(subject_id);`,
+  `CREATE INDEX IF NOT EXISTS idx_kg_triples_predicate ON kg_triples(predicate);`,
+  `CREATE INDEX IF NOT EXISTS idx_kg_triples_valid ON kg_triples(valid_from, valid_to);`,
 ];
 
 const ALT_COLUMNS: Array<[string, string]> = [
@@ -18,6 +47,12 @@ const ALT_COLUMNS: Array<[string, string]> = [
   ["status", "TEXT DEFAULT 'active'"],
   ["abstract", "TEXT"],
   ["summary", "TEXT"],
+  // OpenCode taxonomy fields (optional, non-breaking)
+  ["realm", "TEXT"],
+  ["suite", "TEXT"],
+  ["kind", "TEXT"],
+  // Agent diary field
+  ["agent_id", "TEXT"],
 ];
 
 export const applyWisdomMigrations = (
