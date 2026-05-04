@@ -1,0 +1,29 @@
+{
+  "name": "frieren-opencode-bridge",
+  "version": "0.1.0",
+  "description": "OpenCode plugin bridge for Frieren MCP memory server",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "bunx tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "@opencode-ai/plugin": "^1.3.0",
+    "@opencode-ai/sdk": "^1.3.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.9.3"
+  },
+  "opencode": {
+    "type": "plugin",
+    "hooks": [
+      "chat.message",
+      "event"
+    ]
+  }
+}
