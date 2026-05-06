@@ -1,6 +1,6 @@
 {
   "name": "frieren-opencode-bridge",
-  "version": "0.1.0",
+  "version": "0.6.1",
   "description": "OpenCode plugin bridge for Frieren MCP memory server",
   "type": "module",
   "main": "dist/index.js",

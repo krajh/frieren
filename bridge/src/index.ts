@@ -60,11 +60,18 @@ const callFrierenTool = async (
   args: Record<string, unknown>,
 ): Promise<unknown> => {
   const client = await connectToFrieren();
-  const result = await client.callTool({
+  
+  // Add timeout to prevent hanging on Frieren calls
+  const toolCallPromise = client.callTool({
     name: toolName,
     arguments: args,
   });
-  return result;
+  
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error(`Tool ${toolName} timed out after 5s`)), 5000)
+  );
+  
+  return Promise.race([toolCallPromise, timeoutPromise]);
 };
 
 // Extract text content from MCP tool result
@@ -134,13 +141,16 @@ export const FrierenBridgePlugin: Plugin = async (ctx: PluginInput) => {
       .catch(() => {});
   };
 
-  // Initialize connection on startup
-  try {
-    await connectToFrieren();
-    log("info", "Connected to Frieren MCP server");
-  } catch (error) {
-    log("error", "Failed to connect to Frieren", error);
-  }
+  // Initialize connection on startup (NON-BLOCKING)
+  (async () => {
+    try {
+      await connectToFrieren();
+      log("info", "Connected to Frieren MCP server");
+    } catch (error) {
+      log("error", "Failed to connect to Frieren", error);
+    }
+  })();
+  // Don't await — let connection happen in background
 
   // Graceful shutdown
   const shutdown = async () => {
@@ -168,43 +178,135 @@ export const FrierenBridgePlugin: Plugin = async (ctx: PluginInput) => {
 
     event: async (input) => {
       const event = input.event;
+      log("info", "Event received", { type: event.type });
+
+      // Auto-injection: wake up Frieren context on session start (TRULY NON-BLOCKING)
+      // Note: session.created does NOT exist in OpenCode! Using session.updated instead.
+      if (event.type === "session.updated") {
+        // Only fire once per session - check if wakeup file already exists and is recent
+        const wakeupPath = join(homedir(), ".config", "opencode", "soul", ".frieren-wakeup.json");
+        try {
+          const fs = await import("node:fs/promises");
+          const stats = await fs.stat(wakeupPath);
+          const ageMs = Date.now() - stats.mtimeMs;
+          if (ageMs < 60000) { // Less than 1 minute old = already processed
+            log("info", "Skipping wakeup - file already recent", { ageMs });
+            return;
+          }
+        } catch {
+          // File doesn't exist or error - proceed with wakeup
+        }
+
+        log("info", "session.updated handler fired - doing wakeup");
+        // Fire and forget — do NOT await, let it run in background
+        (async () => {
+          try {
+            // Timeout wrapper for wakeup call
+            const wakeupPromise = callFrierenTool("wisdom_wakeup", {
+              compress: true,
+              max_tokens: 200,
+            });
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error("Wakeup timeout after 3s")), 3000)
+            );
+            
+            const wakeupResult = await Promise.race([wakeupPromise, timeoutPromise]);
+            
+            // Parse the result properly (handle double-encoded JSON)
+            let wakeupData;
+            const rawText = extractResultText(wakeupResult);
+            
+            try {
+              // Try to parse as JSON first
+              wakeupData = JSON.parse(rawText);
+            } catch {
+              // If not JSON, use as-is
+              wakeupData = rawText;
+            }
+            
+            // Write wakeup context to file for Rias to read
+            const wakeupPath = join(homedir(), ".config", "opencode", "soul", ".frieren-wakeup.json");
+            const fs = await import("node:fs/promises");
+            await fs.mkdir(join(homedir(), ".config", "opencode", "soul"), { recursive: true });
+            await fs.writeFile(wakeupPath, JSON.stringify({
+              timestamp: new Date().toISOString(),
+              context: wakeupData,
+            }, null, 2));
+            
+            log("info", "Wrote Frieren wakeup context", { path: wakeupPath });
+            showToast("Frieren Bridge", "Context loaded from Frieren", "success", 3000);
+          } catch (error) {
+            log("warn", "Wakeup failed (session continues normally)", error);
+            // Don't show error toast — session should continue without wakeup
+          }
+        })();
+        // Return immediately — don't await the async function
+      }
 
       if (event.type === "session.idle") {
         const sessionID = event.properties?.sessionID;
         if (!sessionID) return;
-
-        try {
-          // Auto-commit: extract patterns from session
-          await callFrierenTool("memory_commit", {});
-          showToast("Frieren Bridge", "Session patterns extracted to wisdom", "success", 3000);
-        } catch (error) {
-          log("error", "Auto-commit failed", error);
-        }
+        
+        // Non-blocking: fire and forget
+        (async () => {
+          try {
+            // Auto-commit: extract patterns from session
+            await callFrierenTool("memory_commit", {});
+            showToast("Frieren Bridge", "Session patterns extracted to wisdom", "success", 3000);
+          } catch (error) {
+            log("error", "Auto-commit failed", error);
+          }
+        })();
       }
 
       if (event.type === "session.compacted") {
         const sessionID = event.properties?.sessionID;
         if (!sessionID) return;
-
-        try {
-          await handleCompaction(sessionID);
-          showToast("Frieren Bridge", "Session memories restored after compaction", "info", 3000);
-        } catch (error) {
-          log("error", "Compaction recovery failed", error);
-        }
+        
+        // Non-blocking: fire and forget
+        (async () => {
+          try {
+            await handleCompaction(sessionID);
+            showToast("Frieren Bridge", "Session memories restored after compaction", "info", 3000);
+          } catch (error) {
+            log("error", "Compaction recovery failed", error);
+          }
+        })();
       }
     },
 
     tool: {
       // Delegate all Frieren tools through the bridge
-      frieren_status: tool({
-        description: "Report Frieren storage stats and health across all planes",
-        args: {},
-        async execute() {
-          const result = await callFrierenTool("frieren_status", {});
-          return extractResultText(result);
-        },
-      }),
+       frieren_status: tool({
+         description: "Report Frieren storage stats and health across all planes",
+         args: {},
+         async execute() {
+           const result = await callFrierenTool("frieren_status", {});
+           return extractResultText(result);
+         },
+       }),
+
+       wisdom_wakeup: tool({
+         description: "Get compact wake-up context (L0 identity + L1 essential facts). Returns ≤200 tokens for system prompt injection.",
+         args: {
+           compress: tool.schema
+             .boolean()
+             .optional()
+             .describe("Use AAAK-style compression for L1 (default true)"),
+           include_session: tool.schema
+             .boolean()
+             .optional()
+             .describe("Include recent session events in L1"),
+           max_tokens: tool.schema
+             .number()
+             .optional()
+             .describe("Max tokens for L1 (default 120, L0~50)"),
+         },
+         async execute(args) {
+           const result = await callFrierenTool("wisdom_wakeup", args);
+           return extractResultText(result);
+         },
+       }),
 
       wisdom_write: tool({
         description: "Write a wisdom entry to the Frieren wisdom plane",
