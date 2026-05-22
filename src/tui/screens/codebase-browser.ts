@@ -9,16 +9,10 @@ import {
 } from "@opentui/core";
 
 import { createListDetail } from "../components/list-detail.js";
-import { clearCache, getFileChunks, getProjectFiles, listIndexedProjects, setQueryLimit, type CodeChunk, type WisdomEntry } from "../lib/frieren.js";
+import { createTextCard } from "../components/text-card.js";
+import { truncate } from "../lib/format.js";
+import { clearCache, getFileChunks, getProjectFiles, listIndexedProjects, type CodeChunk, type WisdomEntry } from "../lib/frieren.js";
 import { getTheme } from "../lib/theme.js";
-
-const truncate = (value: string, width = 64): string => {
-  return value.length > width ? `${value.slice(0, width - 1)}…` : value;
-};
-
-const createTextCard = (renderer: CliRenderer, content: string, color = "#cbd5e1"): Renderable => {
-  return instantiate(renderer, Box({ width: "100%", flexDirection: "column" }, Text({ content, fg: color })));
-};
 
 export function createCodebaseBrowser(renderer: CliRenderer): {
   root: Renderable;
@@ -36,7 +30,6 @@ export function createCodebaseBrowser(renderer: CliRenderer): {
   let selectedFilePath: string | null = null;
 
   const root = instantiate(renderer, Box({ width: "100%", height: "100%", flexDirection: "column", padding: 1, rowGap: 1 }));
-  setQueryLimit(PAGE_SIZE);
   const headerText = instantiate(renderer, Text({ content: "", fg: "#94a3b8", truncate: true })) as TextRenderable;
   const listDetail = createListDetail(renderer, {
     listTitle: "Files",

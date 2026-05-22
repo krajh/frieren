@@ -146,10 +146,8 @@ const DEFAULT_STATS: FrierenStats = {
   diskUsageBytes: 0,
 };
 
-const DEFAULT_QUERY_LIMIT = 100;
+const MAX_QUERY_LIMIT = 100;
 const QUERY_CACHE_TTL_MS = 3000;
-
-let queryLimit = DEFAULT_QUERY_LIMIT;
 
 const queryCache = new Map<string, CacheEntry<unknown>>();
 
@@ -173,7 +171,7 @@ const withCache = <T>(key: string, loader: () => T, ttlMs = QUERY_CACHE_TTL_MS):
 };
 
 const clampLimit = (limit?: number): number => {
-  return Math.max(1, Math.min(limit ?? queryLimit, queryLimit));
+  return Math.max(1, Math.min(limit ?? MAX_QUERY_LIMIT, MAX_QUERY_LIMIT));
 };
 
 const clampOffset = (offset = 0): number => {
@@ -266,8 +264,9 @@ const getCount = (db: Database, tableName: string, whereClause?: string): number
   }
 };
 
-const getDirectorySize = (targetPath: string): number => {
-  if (!existsSync(targetPath)) {
+const getDirectorySize = (targetPath: string, depth = 0): number => {
+  // Cap at depth 2 to avoid blocking the render loop on large installations.
+  if (!existsSync(targetPath) || depth > 2) {
     return 0;
   }
 
@@ -283,7 +282,7 @@ const getDirectorySize = (targetPath: string): number => {
     }
 
     return readdirSync(targetPath, { withFileTypes: true }).reduce((total, entry) => {
-      return total + getDirectorySize(join(targetPath, entry.name));
+      return total + getDirectorySize(join(targetPath, entry.name), depth + 1);
     }, 0);
   } catch {
     return 0;
@@ -1227,8 +1226,12 @@ export function cancelReaperTask(taskId: string): boolean {
       return false;
     }
 
+    const columns = getTableColumns(handle.db, tableName);
+    const setClause = columns.has("updated_at")
+      ? "SET status = 'cancelled', updated_at = datetime('now')"
+      : "SET status = 'cancelled'";
     const info = handle.db
-      .query(`UPDATE ${tableName} SET status = 'cancelled', updated_at = datetime('now') WHERE task_id = ? AND status = 'pending'`)
+      .query(`UPDATE ${tableName} ${setClause} WHERE task_id = ? AND status = 'pending'`)
       .run(taskId);
 
     if ((info.changes ?? 0) > 0) {
@@ -1262,31 +1265,43 @@ export function createWisdomEntry(entry: CreateWisdomEntryInput): string | null 
       return null;
     }
 
+    const columns = getTableColumns(handle.db, "wisdom_entries");
+    const colList: string[] = [];
+    const valList: string[] = [];
+    const params: Array<string | number | null> = [];
+
+    const addCol = (name: string, value: string | number | null) => {
+      if (columns.has(name)) {
+        colList.push(name);
+        valList.push("?");
+        params.push(value);
+      }
+    };
+
+    addCol("id", id);
+    addCol("type", entry.type);
+    addCol("content", content);
+    addCol("confidence", 0.8);
+    addCol("source_agent", "frieren-tui");
+    addCol("evidence", null);
+    addCol("tags", JSON.stringify((entry.tags ?? []).filter(Boolean)));
+    addCol("created_at", now);
+    addCol("updated_at", now);
+    addCol("status", "active");
+    addCol("abstract", content.slice(0, 240));
+    addCol("summary", content.slice(0, 120));
+    addCol("realm", entry.realm?.trim() || null);
+    addCol("suite", entry.suite?.trim() || null);
+    addCol("kind", entry.kind?.trim() || null);
+    addCol("agent_id", "frieren-tui");
+
+    if (colList.length === 0) {
+      return null;
+    }
+
     handle.db
-      .query(
-        `INSERT INTO wisdom_entries (
-           id, type, content, confidence, source_agent, evidence, tags,
-           created_at, updated_at, status, abstract, summary, realm, suite, kind, agent_id
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        id,
-        entry.type,
-        content,
-        0.8,
-        "frieren-tui",
-        null,
-        JSON.stringify((entry.tags ?? []).filter(Boolean)),
-        now,
-        now,
-        "active",
-        content.slice(0, 240),
-        content.slice(0, 120),
-        entry.realm?.trim() || null,
-        entry.suite?.trim() || null,
-        entry.kind?.trim() || null,
-        "frieren-tui",
-      );
+      .query(`INSERT INTO wisdom_entries (${colList.join(", ")}) VALUES (${valList.join(", ")})`)
+      .run(...params);
 
     clearCache();
     return id;
@@ -1420,11 +1435,6 @@ export function softDeleteEntry(id: string): boolean {
   }
 }
 
-export function setQueryLimit(limit: number): void {
-  queryLimit = Math.max(1, limit);
-  clearCache();
-}
-
 export function clearCache(): void {
   queryCache.clear();
 }
@@ -1433,9 +1443,10 @@ export function getMemoryTimeline(
   entityId: string,
   since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
 ): MemoryTimelineEntry[] {
-  const timeline: MemoryTimelineEntry[] = [];
+  return withCache(getCacheKey("getMemoryTimeline", [entityId, since]), () => {
+    const timeline: MemoryTimelineEntry[] = [];
 
-  const wisdomHandle = openReadonlyDb(getWisdomDbPath());
+    const wisdomHandle = openReadonlyDb(getWisdomDbPath());
   if (wisdomHandle) {
     try {
       if (hasTable(wisdomHandle.db, "wisdom_entries")) {
@@ -1553,5 +1564,6 @@ export function getMemoryTimeline(
     }
   }
 
-  return timeline.sort((left, right) => left.timestamp.localeCompare(right.timestamp));
+    return timeline.sort((left, right) => left.timestamp.localeCompare(right.timestamp));
+  });
 }

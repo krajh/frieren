@@ -18,6 +18,7 @@ import { buildSpawnPrompt } from "../harness/context.js";
 import { loadConfig } from "../harness/config.js";
 import type { WisdomEntry } from "../lib/frieren.js";
 import { getTheme } from "../lib/theme.js";
+import { applyTextareaTheme } from "../lib/theme-helpers.js";
 
 export interface SpawnDialogHandle {
   root: Renderable;
@@ -143,30 +144,7 @@ export function createSpawnDialog(renderer: CliRenderer): SpawnDialogHandle {
     agentText.fg = theme.fg;
     helpText.fg = theme.muted;
     promptFrame.borderColor = focusIndex === 2 ? theme.accent : theme.border;
-    (promptEditor as unknown as {
-      backgroundColor?: string;
-      focusedBackgroundColor?: string;
-      textColor?: string;
-      focusedTextColor?: string;
-    }).backgroundColor = theme.bg;
-    (promptEditor as unknown as {
-      backgroundColor?: string;
-      focusedBackgroundColor?: string;
-      textColor?: string;
-      focusedTextColor?: string;
-    }).focusedBackgroundColor = theme.bg;
-    (promptEditor as unknown as {
-      backgroundColor?: string;
-      focusedBackgroundColor?: string;
-      textColor?: string;
-      focusedTextColor?: string;
-    }).textColor = theme.fg;
-    (promptEditor as unknown as {
-      backgroundColor?: string;
-      focusedBackgroundColor?: string;
-      textColor?: string;
-      focusedTextColor?: string;
-    }).focusedTextColor = theme.fg;
+    applyTextareaTheme(promptEditor, theme);
     actionText.fg = theme.fg;
     statusFrame.borderColor = theme.border;
     statusFrame.backgroundColor = theme.bg;

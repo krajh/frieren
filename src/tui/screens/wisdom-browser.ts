@@ -11,7 +11,9 @@ import {
 import { createListDetail } from "../components/list-detail.js";
 import { createMemoryDetailOverlay } from "../components/memory-detail.js";
 import { createSearchInput } from "../components/search-input.js";
+import { createTextCard } from "../components/text-card.js";
 import { promptFor } from "../lib/prompt.js";
+import { truncate, formatStamp } from "../lib/format.js";
 import {
   clearCache,
   getMemoryTimeline,
@@ -19,7 +21,6 @@ import {
   getWisdomRelations,
   relateEntries,
   searchWisdom,
-  setQueryLimit,
   softDeleteEntry,
   updateEntryMeta,
   type WisdomEntry,
@@ -27,17 +28,6 @@ import {
 import { getTheme } from "../lib/theme.js";
 
 const TYPE_FILTERS = ["all", "decision", "pattern", "constraint", "issue"] as const;
-
-const truncate = (value: string, width = 72): string => {
-  const normalized = value.replace(/\s+/g, " ").trim();
-  return normalized.length > width ? `${normalized.slice(0, width - 1)}…` : normalized;
-};
-
-const formatStamp = (value: string | undefined): string => value?.replace("T", " ").slice(0, 16) ?? "-";
-
-const createTextCard = (renderer: CliRenderer, content: string, color = "#cbd5e1"): Renderable => {
-  return instantiate(renderer, Box({ width: "100%", flexDirection: "column" }, Text({ content, fg: color })));
-};
 
 export function createWisdomBrowser(renderer: CliRenderer): {
   root: Renderable;
@@ -63,7 +53,6 @@ export function createWisdomBrowser(renderer: CliRenderer): {
   );
 
   const filterText = instantiate(renderer, Text({ content: "", fg: "#94a3b8", truncate: true })) as TextRenderable;
-  setQueryLimit(PAGE_SIZE);
   const search = createSearchInput(renderer, {
     placeholder: "Search wisdom entries…",
     debounceMs: 150,
@@ -119,7 +108,7 @@ export function createWisdomBrowser(renderer: CliRenderer): {
       listDetail.setDetail(
         createTextCard(
           renderer,
-          "No wisdom entries yet. Wisdom accumulates as agents store decisions and patterns during sessions.",
+          "No wisdom entries yet. Press `n` to create one, or run agent sessions to accumulate wisdom.",
           "#94a3b8",
         ),
       );

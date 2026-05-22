@@ -10,19 +10,10 @@ import {
 
 import { createListDetail } from "../components/list-detail.js";
 import { createMemoryDetailOverlay } from "../components/memory-detail.js";
-import { clearCache, getProjects, getRecentEvents, getSessionEvents, setQueryLimit, type SessionEvent, type WisdomEntry } from "../lib/frieren.js";
+import { createTextCard } from "../components/text-card.js";
+import { truncate, formatStamp, formatStampShort } from "../lib/format.js";
+import { clearCache, getProjects, getRecentEvents, getSessionEvents, type SessionEvent, type WisdomEntry } from "../lib/frieren.js";
 import { getTheme } from "../lib/theme.js";
-
-const formatStamp = (value: string | undefined): string => value?.replace("T", " ").slice(5, 16) ?? "-";
-
-const truncate = (value: string, width = 58): string => {
-  const normalized = value.replace(/\s+/g, " ").trim();
-  return normalized.length > width ? `${normalized.slice(0, width - 1)}…` : normalized;
-};
-
-const createTextCard = (renderer: CliRenderer, content: string, color = "#cbd5e1"): Renderable => {
-  return instantiate(renderer, Box({ width: "100%", flexDirection: "column" }, Text({ content, fg: color })));
-};
 
 export function createSessionBrowser(renderer: CliRenderer): {
   root: Renderable;
@@ -39,7 +30,6 @@ export function createSessionBrowser(renderer: CliRenderer): {
   let selectedEventId: string | null = null;
 
   const root = instantiate(renderer, Box({ width: "100%", height: "100%", flexDirection: "column", padding: 1, rowGap: 1 }));
-  setQueryLimit(PAGE_SIZE);
   const headerText = instantiate(renderer, Text({ content: "", fg: "#94a3b8", truncate: true })) as TextRenderable;
   const listDetail = createListDetail(renderer, {
     listTitle: "Session Events",
@@ -107,7 +97,7 @@ export function createSessionBrowser(renderer: CliRenderer): {
     projectIndex = Math.max(0, Math.min(projectIndex, Math.max(projects.length - 1, 0)));
     events = currentProject() ? getRecentEvents(currentProject(), PAGE_SIZE, page * PAGE_SIZE) : [];
     listDetail.setList(
-      events.map((event) => `${formatStamp(event.created_at)}  ${event.event_type}  [${event.session_id.slice(0, 8)}] ${truncate(event.summary ?? event.content)}`),
+      events.map((event) => `${formatStampShort(event.created_at)}  ${event.event_type}  [${event.session_id.slice(0, 8)}] ${truncate(event.summary ?? event.content, 58)}`),
     );
     const selectedIndex = selectedEventId
       ? events.findIndex((event) => (event.id ?? `${event.session_id}:${event.created_at}`) === selectedEventId)

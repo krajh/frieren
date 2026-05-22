@@ -225,7 +225,7 @@ export function createApp(renderer: CliRenderer): AppHandle {
 
   const refreshInterval = globalThis.setInterval(() => {
     screens[activeIndex]?.refresh();
-    lastStats = activeIndex === 0 ? dashboard.refresh() : getStats();
+    lastStats = getStats();
     statusBar.update({
       projectName: getProjectName(),
       activeScreen: getActiveScreenName(activeIndex),

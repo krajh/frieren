@@ -97,6 +97,8 @@ export function createSearchInput(
 
   const sync = (): void => {
     label.content = buildLabel(labelText, focused);
+    const theme = getTheme();
+    (root as Renderable & { borderColor?: string }).borderColor = focused ? theme.accent : theme.border;
     renderer.requestRender();
   };
 

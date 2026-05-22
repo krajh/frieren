@@ -1,6 +1,5 @@
 import type { Plugin, PluginInput } from "@opencode-ai/plugin";
 import { tool } from "@opencode-ai/plugin";
-import type { TextPart } from "@opencode-ai/sdk";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { join, dirname } from "node:path";
@@ -96,33 +95,28 @@ const extractResultText = (result: unknown): string => {
   return JSON.stringify(result);
 };
 
-// Auto-capture: summarize and store conversation
-const autoCapture = async (
-  sessionID: string,
-  userMessage: string,
-  assistantMessage: string,
-): Promise<void> => {
+// Compaction capture: restore context AND store durable snapshot for handoffs
+const captureCompaction = async (sessionID: string): Promise<void> => {
   try {
-    const summary = `User: ${userMessage.slice(0, 500)}\nAssistant: ${assistantMessage.slice(0, 500)}`;
-    await callFrierenTool("session_write", {
-      event_type: "note",
-      content: summary,
-      session_id: sessionID,
-    });
-  } catch (error) {
-    log("error", "Auto-capture failed", error);
-  }
-};
-
-// Compaction recovery: restore memories after context compaction
-const handleCompaction = async (sessionID: string): Promise<void> => {
-  try {
-    await callFrierenTool("session_recall", {
+    // Restore context into current session
+    const recallResult = await callFrierenTool("session_recall", {
       query: "recent context",
       session_id: sessionID,
     });
+
+    // Store compressed context as durable wisdom for cross-session handoffs
+    const contextText = extractResultText(recallResult);
+    const snippet = contextText.slice(0, 1500);
+    if (snippet.trim()) {
+      await callFrierenTool("wisdom_write", {
+        type: "pattern",
+        content: `Session Compact [${sessionID}]: ${snippet}`,
+        tags: ["compact", "handoff", "session-snapshot"],
+        kind: "session-compact",
+      });
+    }
   } catch (error) {
-    log("error", "Compaction recovery failed", error);
+    log("error", "Compaction capture failed", error);
   }
 };
 
@@ -160,22 +154,6 @@ export const FrierenBridgePlugin: Plugin = async (ctx: PluginInput) => {
   process.on("SIGTERM", shutdown);
 
   return {
-    "chat.message": async (input, output) => {
-      try {
-        const textParts = output.parts.filter(
-          (p): p is TextPart => p.type === "text",
-        );
-        if (textParts.length === 0) return;
-
-        const assistantMessage = textParts.map((p) => p.text).join("\n");
-        if (!assistantMessage.trim()) return;
-
-        await autoCapture(input.sessionID, "", assistantMessage);
-      } catch (error) {
-        log("error", "chat.message hook error", error);
-      }
-    },
-
     event: async (input) => {
       const event = input.event;
       log("info", "Event received", { type: event.type });
@@ -271,10 +249,10 @@ export const FrierenBridgePlugin: Plugin = async (ctx: PluginInput) => {
         // Non-blocking: fire and forget
         (async () => {
           try {
-            await handleCompaction(sessionID);
-            showToast("Frieren Bridge", "Session memories restored after compaction", "info", 3000);
+            await captureCompaction(sessionID);
+            showToast("Frieren Bridge", "Session compact captured for handoff context", "info", 3000);
           } catch (error) {
-            log("error", "Compaction recovery failed", error);
+            log("error", "Compaction capture failed", error);
           }
         })();
       }

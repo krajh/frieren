@@ -11,16 +11,10 @@ import {
 import { createListDetail } from "../components/list-detail.js";
 import { createMemoryDetailOverlay } from "../components/memory-detail.js";
 import { createSearchInput } from "../components/search-input.js";
-import { clearCache, getEntityTriples, getKGTimeline, searchKGEntities, setQueryLimit, type KGEntity, type WisdomEntry } from "../lib/frieren.js";
+import { createTextCard } from "../components/text-card.js";
+import { truncate } from "../lib/format.js";
+import { clearCache, getEntityTriples, getKGTimeline, searchKGEntities, type KGEntity, type WisdomEntry } from "../lib/frieren.js";
 import { getTheme } from "../lib/theme.js";
-
-const createTextCard = (renderer: CliRenderer, content: string, color = "#cbd5e1"): Renderable => {
-  return instantiate(renderer, Box({ width: "100%", flexDirection: "column" }, Text({ content, fg: color })));
-};
-
-const truncate = (value: string, width = 70): string => {
-  return value.length > width ? `${value.slice(0, width - 1)}…` : value;
-};
 
 export function createKGBrowser(renderer: CliRenderer): {
   root: Renderable;
@@ -37,7 +31,6 @@ export function createKGBrowser(renderer: CliRenderer): {
   const root = instantiate(renderer, Box({ width: "100%", height: "100%", flexDirection: "column", padding: 1, rowGap: 1 }));
   const header = instantiate(renderer, Box({ width: "100%", flexDirection: "row", columnGap: 1, alignItems: "center" }));
   const info = instantiate(renderer, Text({ content: "", fg: "#94a3b8", truncate: true })) as TextRenderable;
-  setQueryLimit(PAGE_SIZE);
   const search = createSearchInput(renderer, {
     placeholder: "Search KG entities…",
     debounceMs: 150,

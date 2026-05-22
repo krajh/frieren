@@ -9,22 +9,13 @@ import {
 } from "@opentui/core";
 
 import { createListDetail } from "../components/list-detail.js";
-import { cancelReaperTask, clearCache, getReaperTasks, setQueryLimit, type ReaperTask } from "../lib/frieren.js";
+import { createTextCard } from "../components/text-card.js";
+import { truncate, formatStamp } from "../lib/format.js";
+import { cancelReaperTask, clearCache, getReaperTasks, type ReaperTask } from "../lib/frieren.js";
 import { getTheme } from "../lib/theme.js";
 
 const STATUS_FILTERS = ["all", "pending", "manifesting", "completed", "failed", "dead", "cancelled"] as const;
 const PAGE_SIZE = 50;
-
-const truncate = (value: string, width = 72): string => {
-  const normalized = value.replace(/\s+/g, " ").trim();
-  return normalized.length > width ? `${normalized.slice(0, width - 1)}…` : normalized;
-};
-
-const formatStamp = (value: string | undefined): string => value?.replace("T", " ").slice(0, 16) ?? "-";
-
-const createTextCard = (renderer: CliRenderer, content: string, color = "#cbd5e1"): Renderable => {
-  return instantiate(renderer, Box({ width: "100%", flexDirection: "column" }, Text({ content, fg: color })));
-};
 
 export function createReaperScreen(renderer: CliRenderer): {
   root: Renderable;
@@ -39,7 +30,6 @@ export function createReaperScreen(renderer: CliRenderer): {
 
   const root = instantiate(renderer, Box({ width: "100%", height: "100%", flexDirection: "column", padding: 1, rowGap: 1 }));
   const headerText = instantiate(renderer, Text({ content: "", fg: "#94a3b8", truncate: true })) as TextRenderable;
-  setQueryLimit(PAGE_SIZE);
   const listDetail = createListDetail(renderer, {
     listTitle: "Reaper Queue",
     detailTitle: "Task Detail",

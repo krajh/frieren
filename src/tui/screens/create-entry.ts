@@ -12,6 +12,7 @@ import {
 
 import { createWisdomEntry } from "../lib/frieren.js";
 import { getTheme } from "../lib/theme.js";
+import { applyTextareaTheme } from "../lib/theme-helpers.js";
 import { promptFor } from "../lib/prompt.js";
 
 type CreateEntryResult = {
@@ -123,30 +124,7 @@ export function createCreateEntryOverlay(renderer: CliRenderer): {
     suiteText.fg = theme.fg;
     helpText.fg = theme.muted;
     contentFrame.borderColor = focusIndex === 5 ? theme.accent : theme.border;
-    (editor as unknown as {
-      backgroundColor?: string;
-      focusedBackgroundColor?: string;
-      textColor?: string;
-      focusedTextColor?: string;
-    }).backgroundColor = theme.bg;
-    (editor as unknown as {
-      backgroundColor?: string;
-      focusedBackgroundColor?: string;
-      textColor?: string;
-      focusedTextColor?: string;
-    }).focusedBackgroundColor = theme.bg;
-    (editor as unknown as {
-      backgroundColor?: string;
-      focusedBackgroundColor?: string;
-      textColor?: string;
-      focusedTextColor?: string;
-    }).textColor = theme.fg;
-    (editor as unknown as {
-      backgroundColor?: string;
-      focusedBackgroundColor?: string;
-      textColor?: string;
-      focusedTextColor?: string;
-    }).focusedTextColor = theme.fg;
+    applyTextareaTheme(editor, theme);
     actionText.fg = theme.fg;
     statusText.fg = theme.muted;
   };
