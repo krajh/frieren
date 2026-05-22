@@ -1,0 +1,47 @@
+---
+feature: "Frieren TUI"
+spec: |
+  Build a TUI for Frieren using OpenTUI (@opentui/core) that lets users browse/manage all memory planes (Wisdom, Session, Codebase, KG) and spawn new agent sessions from any memory entry using installed MCP hosts (OpenCode, Claude CLI, etc.). Direct SQLite access to Frieren databases. 4 phases: Foundation → Memory Browsers → Session Spawning → Extended Features.
+---
+
+## Task List
+
+### Feature 1: Foundation
+Description: App shell, Dashboard screen, navigation, and global key handling
+- [x] 1.01 Add @opentui/core dependency to package.json and verify it resolves with Bun (note: Verified @opentui/core@^0.2.15 already present in package.json and resolved in node_modules via bun pm ls.)
+- [x] 1.02 Create src/tui/ directory structure with index.ts entry point and 'tui' script in package.json (note: Created src/tui/ structure with entry point, component/screen/lib files, and added package.json tui script.)
+- [x] 1.03 Build app shell: tab bar (Dashboard/Wisdom/Sessions/Codebase/KG/Reaper), status bar, screen router with Tab/Shift+Tab navigation (note: Started app-shell component work: tab bar, status bar, and screen-router UI.) (note: Built app shell with tab/status components, screen router, placeholders for non-Dashboard tabs, and periodic status refresh.)
+- [x] 1.04 Implement global key handler: / for search, 1-6 for screen switching, Esc/q for back/quit, ? for help overlay, vim-style navigation in lists (note: Started global key-handler implementation in app shell with 1-6, Tab/Shift+Tab, arrows, help toggle, and quit flows.) (note: Implemented global key handling for 1-6, Tab/Shift+Tab, arrows, help toggle, search placeholder notice, and q/Esc quit.)
+- [x] 1.05 Build Dashboard screen with live stats from all three planes (wisdom count, session projects, codebase indexes, KG triples, reaper tasks, disk usage) (note: Started Dashboard screen implementation using live stats and recent session activity from the new data layer.) (note: Implemented Dashboard with live stats, recent activity, and empty-state-safe rendering.)
+- [x] 1.06 Implement data-access layer wrapping Frieren's internal DB modules (read-only in Phase 1/2) with stats queries and empty-state handling (note: Started Phase 1 data-layer implementation; inspecting Frieren DB paths and schema for read-only queries.) (note: Implemented src/tui/lib/frieren.ts with read-only SQLite access, stats/recent activity/project queries, and empty-state-safe fallbacks.)
+
+### Feature 2: Memory Browsers
+Description: Master-detail browsers for all three memory planes with search, filter, and detail views
+- [x] 2.01 Build shared ListDetail layout component (master-detail split pane with scrollable list + preview panel) (note: Started shared ListDetail component implementation for Phase 2 memory browsers.) (note: Built shared ListDetail layout component with keyboard navigation, split-pane layout, and reusable detail rendering.)
+- [x] 2.02 Implement Wisdom Browser: list wisdom entries, search (semantic+keyword), filter by type/kind/tags/project, preview selected entry (note: Implemented Wisdom Browser with type filter, search, preview panel, and full detail overlay.)
+- [x] 2.03 Implement Session Browser: project selector dropdown, event list grouped by session, filter by event_type and date range, preview event detail (note: Implemented Session Browser with project cycling, event list, preview panel, and full detail overlay.)
+- [x] 2.04 Implement Codebase Browser: file list grouped by project, chunk preview with syntax highlighting, dependency graph display (imports/exports) (note: Implemented Codebase Browser with project cycling, file list, chunk preview, and expand/collapse behavior.)
+- [x] 2.05 Build Memory Detail overlay: full-screen modal with all metadata fields, related entries (KG/wisdom_relate), timeline view, action bar (note: Built shared Memory Detail overlay for metadata, related entries, and timeline display.)
+- [x] 2.06 Implement KG Browser screen: entity list, triple viewer (subject-predicate-object), basic graph navigation (note: Implemented KG Browser with searchable entity list, triple preview, and full detail overlay.)
+
+### Feature 3: Session Spawning
+Description: Harness adapters and Spawn dialog to launch agent sessions from memory context
+- [x] 3.01 Define HarnessAdapter interface and adapter registry with detect() and spawn() using Bun.spawn argv arrays (no shell interpolation) (note: Started implementation; inspecting existing TUI architecture and preparing harness subsystem.) (note: Implemented HarnessAdapter/SpawnOptions/SpawnResult contracts plus registry in src/tui/harness/adapter.ts. Registry resolves adapters without shell interpolation and shared waitForSpawnResult captures stderr safely.)
+- [x] 3.02 Implement OpenCode harness adapter: detect via 'which opencode', spawn via 'opencode run --agent <agent> <message>' as positional args (note: Added src/tui/harness/opencode.ts. Detects via `which opencode`, exposes default agent list, spawns with Bun.spawn argv array: ["opencode","run","--agent",agent,prompt].)
+- [x] 3.03 Implement Claude CLI harness adapter: detect via 'which claude', spawn via 'claude -p <prompt>' (note: Added src/tui/harness/claude.ts. Detects via `which claude`, exposes default agent option, spawns with Bun.spawn argv array: ["claude","-p",prompt].)
+- [x] 3.04 Implement auto-detection flow: scan installed harnesses, present available options in Spawn dialog (note: Added src/tui/harness/auto-detect.ts to return installed adapters in preferred order: OpenCode, Claude CLI, then configured custom harnesses.)
+- [x] 3.05 Build Spawn dialog UI: harness selector, agent selector, prompt editor pre-filled from memory context, Launch/Cancel buttons (note: Built full-screen Spawn dialog in src/tui/screens/spawn-dialog.ts with harness selector, agent selector, editable context prompt, launch/cancel actions, and keyboard navigation.)
+- [x] 3.06 Implement context serialization: convert memory entries to prompt-injectable format, handle single and multi-entry context (note: Added src/tui/harness/context.ts for single/multi-entry serialization and buildSpawnPrompt prefill formatting for prompt-injectable memory context.)
+- [x] 3.07 Implement Spawn dialog error state: display spawn failures with stderr, retry/back buttons (note: Spawn dialog now reports running/launched/failed states and shows stderr-backed failure text with retry/back behavior via Launch/Cancel action state.)
+- [x] 3.08 Add ~/.frieren/tui.toml config for harness preferences and custom adapter templates (note: Added ~/.frieren/tui.toml loader in src/tui/harness/config.ts with fallback defaults, preferred harness/agent support, and custom harness parsing.)
+- [x] 3.09 Implement custom harness adapter: user-defined command templates with {prompt} and {context_file} placeholders, temp file creation/cleanup (note: Added src/tui/harness/custom.ts for config-driven adapters, placeholder expansion, temp context file creation/cleanup, detect-command execution, and argv-array spawning without shell use.)
+
+### Feature 4: Extended Features
+Description: Polish, write support, theming, and quality-of-life features
+- [x] 4.01 Implement Reaper queue screen: view pending/manifesting tasks, cancel operations (note: Started Reaper queue screen implementation and queue DB/schema inspection for task browsing/cancel.) (note: Implemented Reaper queue browser with status filter, pagination, detail pane, and pending-task cancel action backed by queue DB updates.)
+- [x] 4.02 Add inline entry creation: quick-add wisdom entries directly from TUI (type, content, tags) (note: Started inline wisdom entry creation overlay and writable wisdom DB API work.) (note: Added global create-entry overlay on n key and writable wisdom DB insertion API for new TUI-authored wisdom entries.)
+- [x] 4.03 Add entry management: relate, edit metadata, soft-delete entries from detail view (note: Started entry management work: relation creation, metadata editing, and soft-delete support from memory detail overlay.) (note: Added wisdom entry management actions from detail view: relate entry, edit tags/kind/realm/suite, and soft-delete with DELETE confirmation.)
+- [x] 4.04 Implement theming: color scheme support via config file, dark/light presets (note: Started Phase 4.04 theming work; inspecting current TUI color usage and config integration points.) (note: Implemented theme system with dark/light presets, config persistence in ~/.frieren/tui.toml, theme toggle keybinding, and theme-aware shared TUI components.)
+- [x] 4.05 Add mouse support for scroll and click (OpenTUI built-in support) (note: Enabled OpenTUI mouse support with renderer useMouse option; existing clickable tab bar remains active for screen switching.)
+- [x] 4.06 Performance optimization: pagination tuning, lazy-load previews, cursor-based pagination for large result sets (note: Started performance optimization work: inspecting query paths for pagination, caching, debounce, and lazy detail loading.) (note: Added query caching/TTL, global query limit controls, paginated browser queries, debounced search inputs, and selection-preserving lazy detail updates.)
+- [x] 4.07 Documentation: README section for TUI usage, keybindings reference, harness configuration guide (note: Added TUI section to README.md with features, keybindings, spawn dialog, and config documentation.)

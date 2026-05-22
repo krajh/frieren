@@ -182,26 +182,16 @@ export const FrierenBridgePlugin: Plugin = async (ctx: PluginInput) => {
 
       // Auto-injection: wake up Frieren context on session start (TRULY NON-BLOCKING)
       // Note: session.created does NOT exist in OpenCode! Using session.updated instead.
-      if (event.type === "session.updated") {
-        // Only fire once per session - check if wakeup file already exists and is recent
-        const wakeupPath = join(homedir(), ".config", "opencode", "soul", ".frieren-wakeup.json");
-        try {
-          const fs = await import("node:fs/promises");
-          const stats = await fs.stat(wakeupPath);
-          const ageMs = Date.now() - stats.mtimeMs;
-          if (ageMs < 60000) { // Less than 1 minute old = already processed
-            log("info", "Skipping wakeup - file already recent", { ageMs });
-            return;
-          }
-        } catch {
-          // File doesn't exist or error - proceed with wakeup
-        }
-
-        log("info", "session.updated handler fired - doing wakeup");
+       if (event.type === "session.updated") {
+        log("info", "session.updated handler fired - checking if wakeup needed");
         // Fire and forget — do NOT await, let it run in background
         (async () => {
           try {
-            // Timeout wrapper for wakeup call
+            const wakeupPath = join(homedir(), ".config", "opencode", "soul", ".frieren-wakeup.json");
+            const fs = await import("node:fs/promises");
+            const crypto = await import("node:crypto");
+            
+            // Get new wakeup content from Frieren
             const wakeupPromise = callFrierenTool("wisdom_wakeup", {
               compress: true,
               max_tokens: 200,
@@ -217,27 +207,42 @@ export const FrierenBridgePlugin: Plugin = async (ctx: PluginInput) => {
             const rawText = extractResultText(wakeupResult);
             
             try {
-              // Try to parse as JSON first
               wakeupData = JSON.parse(rawText);
             } catch {
-              // If not JSON, use as-is
               wakeupData = rawText;
             }
             
-            // Write wakeup context to file for Rias to read
-            const wakeupPath = join(homedir(), ".config", "opencode", "soul", ".frieren-wakeup.json");
-            const fs = await import("node:fs/promises");
-            await fs.mkdir(join(homedir(), ".config", "opencode", "soul"), { recursive: true });
-            await fs.writeFile(wakeupPath, JSON.stringify({
-              timestamp: new Date().toISOString(),
-              context: wakeupData,
-            }, null, 2));
+            // Calculate hash of new content
+            const newContent = JSON.stringify(wakeupData);
+            const newHash = crypto.createHash("sha256").update(newContent).digest("hex").substring(0, 16);
             
-            log("info", "Wrote Frieren wakeup context", { path: wakeupPath });
-            showToast("Frieren Bridge", "Context loaded from Frieren", "success", 3000);
+            // Check if content changed
+            let shouldWrite = true;
+            try {
+              const existingContent = await fs.readFile(wakeupPath, "utf-8");
+              const existingData = JSON.parse(existingContent);
+              if (existingData.hash === newHash) {
+                log("info", "Skipping wakeup - content unchanged", { hash: newHash });
+                shouldWrite = false;
+              }
+            } catch {
+              // File doesn't exist or error - proceed with write
+            }
+            
+            if (shouldWrite) {
+              // Write wakeup context to file for Rias to read
+              await fs.mkdir(join(homedir(), ".config", "opencode", "soul"), { recursive: true });
+              await fs.writeFile(wakeupPath, JSON.stringify({
+                timestamp: new Date().toISOString(),
+                hash: newHash,
+                context: wakeupData,
+              }, null, 2));
+              
+              log("info", "Wrote Frieren wakeup context (content changed)", { path: wakeupPath, hash: newHash });
+              showToast("Frieren Bridge", "Context loaded from Frieren", "success", 3000);
+            }
           } catch (error) {
             log("warn", "Wakeup failed (session continues normally)", error);
-            // Don't show error toast — session should continue without wakeup
           }
         })();
         // Return immediately — don't await the async function

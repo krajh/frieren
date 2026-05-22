@@ -207,6 +207,64 @@ Falls back to flat search automatically if directory scoring is inconclusive.
 
 Every `memory_search` call logs its retrieval path (vector hits, keyword hits, graph expansions, directories visited). Use `retrieval_debug` to query these logs and diagnose why searches returned what they did. Pass `debug: true` to `memory_search` to include trajectory data in the response.
 
+## Terminal UI (`bun run tui`)
+
+Frieren includes a full-screen terminal UI for browsing and managing all memory planes interactively.
+
+### Features
+
+| Feature           | Key          | Description                                     |
+| ----------------- | ------------ | ----------------------------------------------- |
+| **Dashboard**     | `1`          | Live health overview of all planes              |
+| **Wisdom**        | `2`          | Browse, search, filter, and create entries      |
+| **Sessions**      | `3`          | Inspect session history by project              |
+| **Codebase**      | `4`          | Browse indexed files and dependency graphs      |
+| **KG**            | `5`          | Explore knowledge graph entities and triples    |
+| **Reaper**        | `6`          | View and cancel background queue tasks          |
+
+### Keybindings
+
+| Key                  | Action                              |
+| -------------------- | ----------------------------------- |
+| `1`-`6`              | Switch screens                      |
+| `Tab` / `Shift+Tab`  | Next / previous screen              |
+| `←` / `→`            | Navigate screens                    |
+| `↑` / `↓` / `j` / `k`| Navigate lists                      |
+| `Enter`              | Select item / show detail           |
+| `/`                  | Focus search input                  |
+| `s`                  | Spawn agent session from selection  |
+| `n`                  | Create new wisdom entry             |
+| `r` / `e` / `d`      | Relate / edit / soft-delete entry   |
+| `T`                  | Toggle dark/light theme             |
+| `?`                  | Show help overlay                   |
+| `q` / `Esc`          | Quit                                |
+
+### Session Spawning
+
+Press `s` on any memory entry to open the Spawn dialog. The TUI auto-detects installed harnesses:
+
+- **OpenCode** — `opencode run --agent <agent> <prompt>`
+- **Claude CLI** — `claude -p <prompt>`
+- **Custom** — User-defined command templates in `~/.frieren/tui.toml`
+
+All spawning uses `Bun.spawn()` with argv arrays — no shell interpolation.
+
+### Configuration
+
+Create `~/.frieren/tui.toml`:
+
+```toml
+theme = "dark"                    # "dark" or "light"
+preferred_harness = "opencode"
+preferred_agent = "marin-coder"
+
+[[custom_harnesses]]
+name = "Codex"
+id = "codex"
+detect_command = "which codex"
+spawn_template = "codex --agent {agent} {prompt}"
+```
+
 ## MemPalace Integration
 
 Frieren includes [MemPalace](https://github.com/krajh/mempalace) — a verbatim memory system with knowledge graph support. The `mempalace.yaml` config file defines the palace structure (wings, rooms, drawers).

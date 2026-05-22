@@ -5,12 +5,14 @@
   "private": true,
   "scripts": {
     "start": "bun src/index.ts",
+    "tui": "bun src/tui/index.ts",
     "update": "git pull && bun install",
     "test": "bun test --pass-with-no-tests",
     "typecheck": "bunx tsc --noEmit --pretty false"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",
+    "@opentui/core": "^0.2.15",
     "@xenova/transformers": "^2.17.2",
     "sharp": "^0.32.6",
     "sqlite-vec": "^0.1.6"
