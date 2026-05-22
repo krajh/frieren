@@ -636,6 +636,68 @@ const dedupAgainstWisdom = (
   }
 };
 
+// --- KG helpers for structural metadata ---
+
+const upsertEntity = (
+  db: ReturnType<typeof initDb>["db"],
+  name: string,
+  entityType: string,
+  projectId: string | undefined,
+): string => {
+  const existing = db
+    .query<{ id: string }, [string, string]>(
+      `SELECT id FROM kg_entities WHERE name = ? AND type = ? LIMIT 1`,
+    )
+    .get(name, entityType);
+  if (existing) return existing.id;
+
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  db.run(
+    `INSERT INTO kg_entities (id, name, type, attributes, project_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [id, name, entityType, null, projectId ?? null, now, now],
+  );
+  return id;
+};
+
+const addKGTriple = (
+  db: ReturnType<typeof initDb>["db"],
+  subjectId: string,
+  predicate: string,
+  objectId: string | null,
+  objectValue: string | null,
+  confidence: number,
+  source: string,
+  projectId: string | undefined,
+): void => {
+  // Skip if an identical active triple already exists
+  if (objectId) {
+    const existing = db
+      .query<{ id: string }, [string, string, string]>(
+        `SELECT id FROM kg_triples WHERE subject_id = ? AND predicate = ? AND object_id = ? AND valid_to IS NULL LIMIT 1`,
+      )
+      .get(subjectId, predicate, objectId);
+    if (existing) return;
+  } else if (objectValue) {
+    const existing = db
+      .query<{ id: string }, [string, string, string]>(
+        `SELECT id FROM kg_triples WHERE subject_id = ? AND predicate = ? AND object_value = ? AND valid_to IS NULL LIMIT 1`,
+      )
+      .get(subjectId, predicate, objectValue);
+    if (existing) return;
+  }
+
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  db.run(
+    `INSERT INTO kg_triples
+      (id, subject_id, predicate, object_id, object_value, valid_from, valid_to, confidence, source, project_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, subjectId, predicate, objectId, objectValue, now, null, confidence, source, projectId ?? null, now],
+  );
+};
+
 const promoteCandidate = (
   wisdomDb: ReturnType<typeof initDb>["db"],
   candidate: Candidate,
@@ -673,6 +735,47 @@ const promoteCandidate = (
       );
     } catch {
       // Non-fatal vector write failure
+    }
+  }
+
+  // Add KG structural metadata
+  if (projectId) {
+    try {
+      const SKIP_TAGS = new Set(["auto-extracted", "memory-commit"]);
+      const meaningfulTags = candidate.tags.filter(
+        (t) => t && !SKIP_TAGS.has(t) && !t.startsWith("event:"),
+      );
+
+      const projectEntityId = upsertEntity(wisdomDb, projectId, "project", projectId);
+
+      // Link project to each meaningful tag
+      for (const tag of meaningfulTags) {
+        const tagEntityId = upsertEntity(wisdomDb, tag, "topic", projectId);
+        addKGTriple(
+          wisdomDb,
+          projectEntityId,
+          "relates_to",
+          tagEntityId,
+          null,
+          0.6,
+          "memory-commit",
+          projectId,
+        );
+      }
+
+      // Record the wisdom type as a project attribute
+      addKGTriple(
+        wisdomDb,
+        projectEntityId,
+        "has_wisdom_type",
+        null,
+        candidate.inferred_type,
+        0.8,
+        "memory-commit",
+        projectId,
+      );
+    } catch {
+      // Non-fatal: KG population failure should not block wisdom promotion
     }
   }
 
