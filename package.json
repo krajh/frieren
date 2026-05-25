@@ -3,6 +3,9 @@
   "module": "src/index.ts",
   "type": "module",
   "private": true,
+  "bin": {
+    "frieren-tui": "bin/frieren-tui"
+  },
   "scripts": {
     "start": "bun src/index.ts",
     "tui": "bun src/tui/index.ts",

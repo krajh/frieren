@@ -1,0 +1,11 @@
+#!/usr/bin/env bun
+// Runs the Frieren TUI from any location
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(__dirname, '..');
+const entry = resolve(repoRoot, 'src/tui/index.ts');
+
+// Dynamically import so bun runs it fresh
+await import(entry);
