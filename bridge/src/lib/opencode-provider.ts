@@ -1,14 +1,14 @@
 /**
  * OpenCode LLM Provider
  *
- * Uses @opencode-ai/sdk v2 transient sessions to extract structured
- * knowledge via the user's configured LLM provider — no separate API key needed.
+ * Uses the OpenCode SDK client (provided by the bridge plugin runtime)
+ * to extract structured knowledge via transient sessions with json_schema
+ * output format — no separate API key needed.
  *
  * Flow: create transient session → prompt with json_schema format → delete session
  */
 
-import { createOpencodeClient } from "@opencode-ai/sdk/v2/client";
-import type { LLMProvider, ExtractionResult } from "./provider.js";
+import type { LLMProvider, ExtractionResult, OpencodeClient } from "./provider.js";
 import { EXTRACTION_JSON_SCHEMA, parseExtraction } from "./provider.js";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -61,7 +61,10 @@ Return a JSON object matching the schema provided.`;
 export class OpenCodeProvider implements LLMProvider {
   readonly name = "opencode";
 
-  constructor(private readonly timeoutMs: number = 15_000) {}
+  constructor(
+    private readonly client: OpencodeClient,
+    private readonly timeoutMs: number = 15_000,
+  ) {}
 
   async extract(contextText: string): Promise<ExtractionResult | null> {
     const trimmed = contextText.trim();
@@ -73,11 +76,9 @@ export class OpenCodeProvider implements LLMProvider {
     log("info", "Starting OpenCode extraction", { chars: trimmed.length });
 
     try {
-      const client = createOpencodeClient();
-
       // 1. Create transient session
       log("info", "Creating transient extraction session");
-      const createResult = await client.session.create({
+      const createResult = await this.client.session.create({
         directory: "/tmp",
         title: "frieren-extract",
       });
@@ -90,7 +91,7 @@ export class OpenCodeProvider implements LLMProvider {
 
       // 2. Prompt with json_schema output format
       log("info", "Sending extraction prompt");
-      const promptResult = await client.session.prompt({
+      const promptResult = await this.client.session.prompt({
         sessionID: session.id,
         system: SYSTEM_PROMPT,
         format: {
@@ -104,7 +105,7 @@ export class OpenCodeProvider implements LLMProvider {
       const promptData = promptResult.data;
       if (!promptData) {
         log("error", "Extraction prompt returned no data");
-        await this.cleanup(client, session.id);
+        await this.cleanup(session.id);
         return null;
       }
 
@@ -114,7 +115,7 @@ export class OpenCodeProvider implements LLMProvider {
         log("error", "Extraction prompt returned error", {
           error: typeof error === "object" ? JSON.stringify(error).slice(0, 500) : String(error),
         });
-        await this.cleanup(client, session.id);
+        await this.cleanup(session.id);
         return null;
       }
 
@@ -123,7 +124,7 @@ export class OpenCodeProvider implements LLMProvider {
 
       if (!structured) {
         log("warn", "No structured output in response — LLM may not support json_schema format");
-        await this.cleanup(client, session.id);
+        await this.cleanup(session.id);
         return null;
       }
 
@@ -133,7 +134,7 @@ export class OpenCodeProvider implements LLMProvider {
         log("warn", "Structured output failed Zod validation", {
           preview: JSON.stringify(structured).slice(0, 300),
         });
-        await this.cleanup(client, session.id);
+        await this.cleanup(session.id);
         return null;
       }
 
@@ -143,25 +144,23 @@ export class OpenCodeProvider implements LLMProvider {
       });
 
       // 4. Delete session
-      await this.cleanup(client, session.id);
+      await this.cleanup(session.id);
 
       return result;
     } catch (error) {
-      log("error", "OpenCode extraction failed", {
-        error: error instanceof Error ? error.message : String(error),
-      });
+      const msg = error instanceof Error ? error.message : String(error);
+      log("error", "OpenCode extraction failed", { error: msg });
       return null;
     }
   }
 
-  private async cleanup(
-    client: ReturnType<typeof createOpencodeClient>,
-    sessionID: string,
-  ): Promise<void> {
+  private async cleanup(sessionID: string): Promise<void> {
     try {
-      await client.session.delete({ sessionID });
-    } catch {
-      // Silently ignore cleanup errors
+      await this.client.session.delete({ sessionID });
+    } catch (error) {
+      log("warn", "Session cleanup failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 }

@@ -126,6 +126,42 @@ export interface LLMProvider {
 
 export type ProviderKind = "opencode" | "litellm" | "none";
 
+/**
+ * Wrapper for the OpenCode SDK client — avoids hard import dependency at
+ * module level since the client is created by the plugin runtime.
+ */
+export interface OpencodeClient {
+  session: {
+    create: (params: {
+      directory?: string;
+      title?: string;
+    }) => Promise<{ data?: { id: string } }>;
+    prompt: (params: {
+      sessionID: string;
+      system?: string;
+      format?: { type: string; schema: unknown; retryCount?: number };
+      parts: Array<{ type: string; text: string }>;
+    }) => Promise<{
+      data?: {
+        info: { error?: unknown; structured?: unknown };
+      };
+    }>;
+    delete: (params: { sessionID: string }) => Promise<unknown>;
+  };
+}
+
+let _opencodeClient: OpencodeClient | null = null;
+
+/** Store the OpenCode SDK client for use by the provider. */
+export function setOpencodeClient(client: OpencodeClient): void {
+  _opencodeClient = client;
+}
+
+/** Get the stored OpenCode SDK client (null if not inside plugin context). */
+export function getOpencodeClient(): OpencodeClient | null {
+  return _opencodeClient;
+}
+
 let _provider: LLMProvider | null | undefined = undefined; // lazy singleton
 
 /**
@@ -134,6 +170,7 @@ let _provider: LLMProvider | null | undefined = undefined; // lazy singleton
  *
  * Reads: FRIEREN_LLM_PROVIDER (default: "opencode") | FRIEREN_LLM_TIMEOUT
  * For litellm: requires AITOOLINGKEY
+ * For opencode: requires OpenCode SDK client (set via setOpencodeClient)
  */
 export async function getLLMProvider(): Promise<{
   provider: LLMProvider | null;
@@ -151,7 +188,6 @@ export async function getLLMProvider(): Promise<{
       _provider = null;
       return { provider: null, kind: "none" };
     }
-    // Lazy-import to avoid circular deps — provider.ts is the base, llm-extract imports FROM it
     const { LiteLLMProvider } = await import("./llm-extract.js") as {
       LiteLLMProvider: new (apiKey: string, timeoutMs: number) => LLMProvider;
     };
@@ -161,11 +197,16 @@ export async function getLLMProvider(): Promise<{
   }
 
   if (kind === "opencode") {
-    const { OpenCodeProvider } = await import("./opencode-provider.js") as {
-      OpenCodeProvider: new (timeoutMs: number) => LLMProvider;
-    };
+    const client = getOpencodeClient();
+    if (!client) {
+      _provider = null;
+      return { provider: null, kind: "none" };
+    }
     const timeout = Number(process.env.FRIEREN_LLM_TIMEOUT) || 15_000;
-    _provider = new OpenCodeProvider(timeout);
+    const { OpenCodeProvider } = await import("./opencode-provider.js") as {
+      OpenCodeProvider: new (client: OpencodeClient, timeoutMs: number) => LLMProvider;
+    };
+    _provider = new OpenCodeProvider(client, timeout);
     return { provider: _provider, kind };
   }
 

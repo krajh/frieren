@@ -6,7 +6,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
-import { getLLMProvider } from "./lib/provider.js";
+import { getLLMProvider, setOpencodeClient } from "./lib/provider.js";
 import { persistExtraction } from "./lib/extraction-utils.js";
 import type { FrierenToolFn } from "./lib/extraction-utils.js";
 
@@ -163,6 +163,9 @@ export const FrierenBridgePlugin: Plugin = async (ctx: PluginInput) => {
       })
       .catch(() => {});
   };
+
+  // Provide the OpenCode SDK client to the LLM provider system
+  setOpencodeClient(ctx.client as never);
 
   // Initialize connection on startup (NON-BLOCKING)
   (async () => {
