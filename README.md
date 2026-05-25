@@ -23,6 +23,7 @@ Frieren is a local MCP (Model Context Protocol) memory server for AI agents. It 
 | `wisdom_write`    | Store a durable fact or decision in the wisdom plane               |
 | `wisdom_search`   | Search wisdom entries by semantic similarity or keyword            |
 | `wisdom_relate`   | Create a typed relationship between two wisdom entries             |
+| `wisdom_wakeup`   | Compact wake-up context (L0 identity + L1 essential facts)          |
 | `session_write`   | Write an observation or episode to the current session             |
 | `session_recall`  | Retrieve recent session context by query or entity                 |
 | `codebase_index`  | Index a local repository (full or incremental via git diff)        |
@@ -42,6 +43,7 @@ Frieren is a local MCP (Model Context Protocol) memory server for AI agents. It 
 | ------------ | ----------------------------------------------------- |
 | `kg_add`     | Add temporal triples (subject-predicate-object)       |
 | `kg_query`   | Query entity relationships with temporal filtering      |
+| `kg_invalidate` | Mark a triple as no longer valid (fact superseded)  |
 | `kg_validate`| Validate facts against stored knowledge                |
 | `kg_timeline` | Chronological timeline of facts about an entity      |
 
@@ -56,20 +58,13 @@ Frieren is a local MCP (Model Context Protocol) memory server for AI agents. It 
 
 | Tool            | Description                                      |
 | --------------- | ------------------------------------------------ |
-| `reaper_enqueue`| Queue background tasks for Shade execution        |
-| `reaper_dequeue`| Claim the next pending task (atomic)              |
-| `reaper_complete`| Mark a task as completed with results           |
-| `reaper_fail`   | Mark a task as failed (auto-retries)           |
-| `reaper_status` | Query queue state and task status               |
-
-### MemPalace Tools
-
-| Tool               | Description                                          |
-| ------------------ | ---------------------------------------------------- |
-| `mempalace_search` | Semantic search across verbatim drawers              |
-| `mempalace_add`    | File verbatim content into palace drawers              |
-| `mempalace_query`  | Query knowledge graph relationships                    |
-| `mempalace_traverse`| Walk palace graph from a room (cross-wing tunnels)    |
+| `reaper_enqueue` | Queue background tasks for Shade execution        |
+| `reaper_dequeue` | Claim the next pending task (atomic)              |
+| `reaper_heartbeat`| Update heartbeat for a manifesting task          |
+| `reaper_complete`| Mark a task as completed with results             |
+| `reaper_fail`   | Mark a task as failed (auto-retries)              |
+| `reaper_status` | Query queue state and task status                 |
+| `reaper_cancel` | Cancel a pending or in-flight task                |
 
 ## Installation
 
@@ -132,7 +127,7 @@ Add to your project's `opencode.json` or global `~/.config/opencode/opencode.jso
 
 #### Option B: OpenCode Bridge Plugin (Recommended for OpenCode)
 
-The `bridge/` module provides an OpenCode plugin with automatic memory capture and session management.
+The `bridge/` module provides an OpenCode plugin with durable memory capture and session management.
 
 **1. Build the bridge:**
 ```bash
@@ -153,11 +148,11 @@ bun run build
 **3. Restart OpenCode** — the plugin connects automatically.
 
 **What the bridge adds:**
-- ✅ Automatic memory capture (every assistant message stored)
-- ✅ Session idle hooks (auto-extracts patterns to wisdom)
-- ✅ Compaction recovery (restores context after compact)
+- ✅ Compaction capture — session compactions persist as durable wisdom entries
+- ✅ Session idle hooks — auto-extracts recurrent patterns via `memory_commit`
+- ✅ Context injection — relevant wisdom surfaced at session start
 - ✅ Toast notifications for key events
-- ✅ All 28 Frieren tools via OpenCode's native plugin interface
+- ✅ All 30 Frieren tools via OpenCode's native plugin interface
 
 See [bridge/README.md](bridge/README.md) for full details.
 
@@ -201,7 +196,7 @@ Falls back to flat search automatically if directory scoring is inconclusive.
 
 ### Auto Memory Extraction
 
-`memory_commit` analyzes session events across recent sessions, clusters them by semantic similarity, and auto-promotes recurring patterns to durable wisdom entries. Use `dry_run: true` to preview candidates before writing.
+`memory_commit` analyzes session events across recent sessions, clusters them by semantic similarity, and auto-promotes recurring patterns to durable wisdom entries. When patterns are promoted, it also populates the knowledge graph with structural metadata (project→relates_to→topic triples). Use `dry_run: true` to preview candidates before writing.
 
 ### Retrieval Trajectory Logging
 
@@ -264,31 +259,6 @@ id = "codex"
 detect_command = "which codex"
 spawn_template = "codex --agent {agent} {prompt}"
 ```
-
-## MemPalace Integration
-
-Frieren includes [MemPalace](https://github.com/krajh/mempalace) — a verbatim memory system with knowledge graph support. The `mempalace.yaml` config file defines the palace structure (wings, rooms, drawers).
-
-**Key features:**
-- **Verbatim storage** — Exact content preserved (no summarization)
-- **Knowledge graph** — Temporal triples with confidence scoring
-- **Cross-wing tunnels** — Link related concepts across domains
-- **AAAK compression** — Entity-coded diary format for agents
-- **Semantic search** — Vector similarity across all drawers
-
-**Quick start:**
-```bash
-# Search palace memories
-frieren_mempalace_search({ query: "your search terms" })
-
-# Add verbatim content
-frieren_mempalace_add_drawer({ wing: "project", room: "decisions", content: "..." })
-
-# Query knowledge graph
-frieren_mempalace_kg_query({ entity: "MyProject" })
-```
-
-See the tool table above for all 28 available tools (including MemPalace, KG, diary, and Reaper Realm tools).
 
 ## Usage Patterns
 
