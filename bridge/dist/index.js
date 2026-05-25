@@ -5,6 +5,8 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
+import { getLLMProvider } from "./lib/provider.js";
+import { persistExtraction } from "./lib/extraction-utils.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // File-only logger
 const LOG_DIR = join(homedir(), ".config", "opencode", "logs");
@@ -71,30 +73,49 @@ const extractResultText = (result) => {
     }
     return JSON.stringify(result);
 };
-// Auto-capture: summarize and store conversation
-const autoCapture = async (sessionID, userMessage, assistantMessage) => {
+// Compaction capture: extract structured knowledge via LLM provider
+// Returns the provider kind used (or "none" for fallback)
+const captureCompaction = async (sessionID) => {
     try {
-        const summary = `User: ${userMessage.slice(0, 500)}\nAssistant: ${assistantMessage.slice(0, 500)}`;
-        await callFrierenTool("session_write", {
-            event_type: "note",
-            content: summary,
-            session_id: sessionID,
-        });
-    }
-    catch (error) {
-        log("error", "Auto-capture failed", error);
-    }
-};
-// Compaction recovery: restore memories after context compaction
-const handleCompaction = async (sessionID) => {
-    try {
-        await callFrierenTool("session_recall", {
+        // Get compact context from session recall
+        const recallResult = await callFrierenTool("session_recall", {
             query: "recent context",
             session_id: sessionID,
         });
+        const contextText = extractResultText(recallResult);
+        const snippet = contextText.slice(0, 4000);
+        if (!snippet.trim())
+            return "none";
+        // Try LLM-enhanced extraction
+        const { provider, kind } = await getLLMProvider();
+        if (provider) {
+            log("info", "Running LLM extraction on compact", { provider: kind, sessionID });
+            const result = await provider.extract(contextText);
+            if (result && (result.wisdom.length > 0 || result.triples.length > 0)) {
+                const callTool = callFrierenTool;
+                const summary = await persistExtraction(result, callTool);
+                if (summary.wisdomWritten > 0 || summary.triplesWritten > 0) {
+                    log("info", "LLM extraction persisted", summary);
+                    return kind; // LLM extraction handled it
+                }
+            }
+        }
+        // Fallback: store raw compact as durable wisdom snapshot
+        log("info", "Falling back to raw compact snapshot", { sessionID });
+        const fallbackSnippet = snippet.slice(0, 1500);
+        if (fallbackSnippet.trim()) {
+            await callFrierenTool("wisdom_write", {
+                type: "pattern",
+                content: `Session Compact [${sessionID}]: ${fallbackSnippet}`,
+                tags: ["compact", "handoff", "session-snapshot"],
+                kind: "session-compact",
+            });
+        }
+        return "none";
     }
     catch (error) {
-        log("error", "Compaction recovery failed", error);
+        log("error", "Compaction capture failed", error);
+        return "none";
     }
 };
 export const FrierenBridgePlugin = async (ctx) => {
@@ -124,20 +145,6 @@ export const FrierenBridgePlugin = async (ctx) => {
     process.on("SIGINT", shutdown);
     process.on("SIGTERM", shutdown);
     return {
-        "chat.message": async (input, output) => {
-            try {
-                const textParts = output.parts.filter((p) => p.type === "text");
-                if (textParts.length === 0)
-                    return;
-                const assistantMessage = textParts.map((p) => p.text).join("\n");
-                if (!assistantMessage.trim())
-                    return;
-                await autoCapture(input.sessionID, "", assistantMessage);
-            }
-            catch (error) {
-                log("error", "chat.message hook error", error);
-            }
-        },
         event: async (input) => {
             const event = input.event;
             log("info", "Event received", { type: event.type });
@@ -224,11 +231,14 @@ export const FrierenBridgePlugin = async (ctx) => {
                 // Non-blocking: fire and forget
                 (async () => {
                     try {
-                        await handleCompaction(sessionID);
-                        showToast("Frieren Bridge", "Session memories restored after compaction", "info", 3000);
+                        const kind = await captureCompaction(sessionID);
+                        const msg = kind === "none"
+                            ? "Session compact stored (no LLM provider)"
+                            : `Session knowledge extracted via ${kind}`;
+                        showToast("Frieren Bridge", msg, "info", 3000);
                     }
                     catch (error) {
-                        log("error", "Compaction recovery failed", error);
+                        log("error", "Compaction capture failed", error);
                     }
                 })();
             }

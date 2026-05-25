@@ -6,6 +6,9 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
+import { getLLMProvider } from "./lib/provider.js";
+import { persistExtraction } from "./lib/extraction-utils.js";
+import type { FrierenToolFn } from "./lib/extraction-utils.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -95,28 +98,54 @@ const extractResultText = (result: unknown): string => {
   return JSON.stringify(result);
 };
 
-// Compaction capture: restore context AND store durable snapshot for handoffs
-const captureCompaction = async (sessionID: string): Promise<void> => {
+// Compaction capture: extract structured knowledge via LLM provider
+// Returns the provider kind used (or "none" for fallback)
+const captureCompaction = async (sessionID: string): Promise<string> => {
   try {
-    // Restore context into current session
+    // Get compact context from session recall
     const recallResult = await callFrierenTool("session_recall", {
       query: "recent context",
       session_id: sessionID,
     });
 
-    // Store compressed context as durable wisdom for cross-session handoffs
     const contextText = extractResultText(recallResult);
-    const snippet = contextText.slice(0, 1500);
-    if (snippet.trim()) {
+    const snippet = contextText.slice(0, 4000);
+    if (!snippet.trim()) return "none";
+
+    // Try LLM-enhanced extraction
+    const { provider, kind } = await getLLMProvider();
+
+    if (provider) {
+      log("info", "Running LLM extraction on compact", { provider: kind, sessionID });
+      const result = await provider.extract(contextText);
+
+      if (result && (result.wisdom.length > 0 || result.triples.length > 0)) {
+        const callTool: FrierenToolFn = callFrierenTool;
+        const summary = await persistExtraction(result, callTool);
+
+        if (summary.wisdomWritten > 0 || summary.triplesWritten > 0) {
+          log("info", "LLM extraction persisted", summary);
+          return kind; // LLM extraction handled it
+        }
+      }
+    }
+
+    // Fallback: store raw compact as durable wisdom snapshot
+    log("info", "Falling back to raw compact snapshot", { sessionID });
+    const fallbackSnippet = snippet.slice(0, 1500);
+    if (fallbackSnippet.trim()) {
       await callFrierenTool("wisdom_write", {
         type: "pattern",
-        content: `Session Compact [${sessionID}]: ${snippet}`,
+        content: `Session Compact [${sessionID}]: ${fallbackSnippet}`,
         tags: ["compact", "handoff", "session-snapshot"],
         kind: "session-compact",
       });
     }
+
+    return "none";
   } catch (error) {
     log("error", "Compaction capture failed", error);
+    return "none";
   }
 };
 
@@ -249,8 +278,11 @@ export const FrierenBridgePlugin: Plugin = async (ctx: PluginInput) => {
         // Non-blocking: fire and forget
         (async () => {
           try {
-            await captureCompaction(sessionID);
-            showToast("Frieren Bridge", "Session compact captured for handoff context", "info", 3000);
+            const kind = await captureCompaction(sessionID);
+            const msg = kind === "none"
+              ? "Session compact stored (no LLM provider)"
+              : `Session knowledge extracted via ${kind}`;
+            showToast("Frieren Bridge", msg, "info", 3000);
           } catch (error) {
             log("error", "Compaction capture failed", error);
           }
