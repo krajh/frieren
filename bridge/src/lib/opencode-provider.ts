@@ -63,7 +63,8 @@ export class OpenCodeProvider implements LLMProvider {
 
   constructor(
     private readonly client: OpencodeClient,
-    private readonly timeoutMs: number = 15_000,
+    /** @deprecated timeout is managed by SDK client */
+    _timeoutMs?: number,
   ) {}
 
   async extract(contextText: string): Promise<ExtractionResult | null> {

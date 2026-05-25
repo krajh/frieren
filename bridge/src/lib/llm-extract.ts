@@ -195,7 +195,8 @@ export class LiteLLMProvider implements LLMProvider {
     const jsonBlockMatch = raw.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
     if (jsonBlockMatch) {
       try {
-        return JSON.parse(jsonBlockMatch[1].trim());
+        const captured = jsonBlockMatch[1];
+        if (captured) return JSON.parse(captured.trim());
       } catch {
         /* fall through */
       }
