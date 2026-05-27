@@ -7,6 +7,54 @@
  */
 
 import { z } from "zod";
+import { readFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
+import { homedir } from "node:os";
+
+// ─── Config Reader ───────────────────────────────────────────────────────────
+
+interface FrierenLitellmConfig {
+  apiKey?: string;
+  baseUrl?: string;
+}
+
+interface FrierenConfig {
+  litellm?: FrierenLitellmConfig;
+}
+
+/**
+ * Read ~/.frieren/config.json for LiteLLM settings.
+ * Returns null if the file doesn't exist or is malformed.
+ */
+function readFrierenConfig(): FrierenConfig | null {
+  const configPath = join(homedir(), ".frieren", "config.json");
+  try {
+    if (!existsSync(configPath)) return null;
+    const raw = readFileSync(configPath, "utf-8");
+    return JSON.parse(raw) as FrierenConfig;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve the LiteLLM API key: env var first, then Frieren config.
+ */
+function resolveLitellmApiKey(): string | null {
+  const envKey = process.env.AITOOLINGKEY;
+  if (envKey) return envKey;
+  const config = readFrierenConfig();
+  return config?.litellm?.apiKey ?? null;
+}
+
+/**
+ * Detect the best default provider when FRIEREN_LLM_PROVIDER is not set.
+ * Prefer litellm if configured, otherwise opencode.
+ */
+function detectDefaultProvider(): "litellm" | "opencode" {
+  if (resolveLitellmApiKey()) return "litellm";
+  return "opencode";
+}
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -168,9 +216,11 @@ let _provider: LLMProvider | null | undefined = undefined; // lazy singleton
  * Get or create the LLM provider based on FRIEREN_LLM_PROVIDER env var.
  * Returns null if no suitable provider is configured.
  *
- * Reads: FRIEREN_LLM_PROVIDER (default: "opencode") | FRIEREN_LLM_TIMEOUT
- * For litellm: requires AITOOLINGKEY
+ * Reads: FRIEREN_LLM_PROVIDER (default: auto-detect) | FRIEREN_LLM_TIMEOUT
+ * For litellm: requires AITOOLINGKEY (env) or litellm.apiKey (~/.frieren/config.json)
  * For opencode: requires OpenCode SDK client (set via setOpencodeClient)
+ *
+ * Auto-detect: prefers litellm if an API key is available in config, else opencode.
  */
 export async function getLLMProvider(): Promise<{
   provider: LLMProvider | null;
@@ -180,10 +230,11 @@ export async function getLLMProvider(): Promise<{
     return { provider: _provider, kind: inferKind(_provider) };
   }
 
-  const kind = (process.env.FRIEREN_LLM_PROVIDER ?? "opencode") as ProviderKind;
+  const configured = process.env.FRIEREN_LLM_PROVIDER;
+  const kind = (configured ?? detectDefaultProvider()) as ProviderKind;
 
   if (kind === "litellm") {
-    const apiKey = process.env.AITOOLINGKEY;
+    const apiKey = resolveLitellmApiKey();
     if (!apiKey) {
       _provider = null;
       return { provider: null, kind: "none" };
