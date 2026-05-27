@@ -3,6 +3,13 @@ import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
 import { execSync } from "node:child_process";
 
+export type ProjectInfo = {
+  projectId: string;
+  displayName: string;
+  remoteUrl: string;
+  branch: string;
+};
+
 const normalizeRemote = (remote: string): string => {
   let normalized = remote.trim().toLowerCase();
 
@@ -15,6 +22,75 @@ const normalizeRemote = (remote: string): string => {
   }
 
   return normalized;
+};
+
+/**
+ * Extract a human-readable repo name from a git remote URL.
+ * Examples:
+ *   git@github.com:brisingr/frieren.git → "frieren"
+ *   https://github.com/opencode-ai/opencode → "opencode"
+ *   git@gitlab.com:team/my-project.git → "my-project"
+ */
+export const extractRepoName = (remoteUrl: string): string => {
+  // Strip protocol prefix and git@
+  let path = remoteUrl.trim();
+
+  // Remove protocol prefix (https://, http://, ssh://)
+  path = path.replace(/^(https?:\/\/|ssh:\/\/|git:\/\/)/, "");
+
+  // Remove git@ prefix
+  path = path.replace(/^git@/, "");
+
+  // Remove host (everything up to the first colon or slash after host)
+  // For SSH-style: git@github.com:brisingr/frieren.git → brisingr/frieren
+  // For HTTPS-style: https://github.com/brisingr/frieren.git → brisingr/frieren
+  path = path.replace(/^[^:/]+[/:]/, "");
+
+  // Strip .git suffix
+  path = path.replace(/\.git$/, "");
+
+  // Strip trailing slash
+  path = path.replace(/\/$/, "");
+
+  // Take the last segment (the repo name)
+  const segments = path.split("/");
+  const name = segments[segments.length - 1] ?? path;
+
+  return name || "unknown";
+};
+
+/**
+ * Detect both the project ID hash and a human-readable display name
+ * for the current working directory's git project.
+ */
+export const detectProjectInfo = (cwd: string = process.cwd()): ProjectInfo | null => {
+  const configPath = findGitConfig(cwd);
+  if (!configPath) {
+    return null;
+  }
+
+  const rawConfig = readFileSync(configPath, "utf8");
+  const origin = parseOrigin(rawConfig);
+  if (!origin) {
+    return null;
+  }
+
+  const normalized = normalizeRemote(origin);
+  const branch = getCurrentBranch(cwd);
+  const hash = createHash("sha256")
+    .update(`${normalized}::${branch}`)
+    .digest("hex");
+
+  const displayName = extractRepoName(origin);
+  const projectId = hash.slice(0, 16);
+  const branchSuffix = branch !== "main" && branch !== "master" ? ` (${branch})` : "";
+
+  return {
+    projectId,
+    displayName: `${displayName}${branchSuffix}`,
+    remoteUrl: normalized,
+    branch,
+  };
 };
 
 /**
@@ -117,22 +193,6 @@ const getCurrentBranch = (cwd: string): string => {
 };
 
 export const detectProjectId = (cwd: string = process.cwd()): string | null => {
-  const configPath = findGitConfig(cwd);
-  if (!configPath) {
-    return null;
-  }
-
-  const rawConfig = readFileSync(configPath, "utf8");
-  const origin = parseOrigin(rawConfig);
-  if (!origin) {
-    return null;
-  }
-
-  const normalized = normalizeRemote(origin);
-  const branch = getCurrentBranch(cwd);
-  // Include branch so different worktrees of the same repo get distinct IDs
-  const hash = createHash("sha256")
-    .update(`${normalized}::${branch}`)
-    .digest("hex");
-  return hash.slice(0, 16);
+  const info = detectProjectInfo(cwd);
+  return info?.projectId ?? null;
 };

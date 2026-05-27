@@ -12,7 +12,7 @@ import { createListDetail } from "../components/list-detail.js";
 import { createMemoryDetailOverlay } from "../components/memory-detail.js";
 import { createTextCard } from "../components/text-card.js";
 import { truncate, formatStamp, formatStampShort } from "../lib/format.js";
-import { clearCache, getProjects, getRecentEvents, getSessionEvents, type SessionEvent, type WisdomEntry } from "../lib/frieren.js";
+import { clearCache, getProjects, getRecentEvents, getSessionEvents, resolveProjectName, type SessionEvent, type WisdomEntry } from "../lib/frieren.js";
 import { getTheme } from "../lib/theme.js";
 
 export function createSessionBrowser(renderer: CliRenderer): {
@@ -59,7 +59,8 @@ export function createSessionBrowser(renderer: CliRenderer): {
 
   function updateHeader(): void {
     headerText.fg = getTheme().muted;
-    headerText.content = `Project: ${currentProject() ?? "(none)"}  |  Page: ${page + 1}  |  Events: ${events.length}  |  Keys: p cycle  [,/.] page  Enter detail`;
+    const proj = currentProject();
+    headerText.content = `Project: ${proj ? resolveProjectName(proj) : "(none)"}  |  Page: ${page + 1}  |  Events: ${events.length}  |  Keys: p cycle  [,/.] page  Enter detail`;
   }
 
   function updateDetail(): void {

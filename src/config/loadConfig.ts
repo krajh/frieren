@@ -14,6 +14,8 @@ export type FrierenConfig = {
   session: {
     retentionDays: number;
   };
+  /** Optional human-readable project names keyed by project ID hash */
+  project_names?: Record<string, string>;
 };
 
 export const DEFAULT_CONFIG: FrierenConfig = {
@@ -66,7 +68,42 @@ const mergeConfig = (
       ...base.session,
       ...override.session,
     },
+    project_names: {
+      ...(base.project_names ?? {}),
+      ...(override.project_names ?? {}),
+    },
   };
+};
+
+export const saveProjectName = (projectId: string, name: string): void => {
+  const configPath = expandHome(
+    join(DEFAULT_CONFIG.storage.home, CONFIG_FILE_NAME),
+  );
+  try {
+    const raw = readFileSync(configPath, "utf8");
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const existing: Record<string, string> = (parsed.project_names as Record<string, string>) ?? {};
+    if (existing[projectId] === name) return; // already set
+    existing[projectId] = name;
+    parsed.project_names = existing;
+    writeFileSync(configPath, JSON.stringify(parsed, null, 2));
+    return;
+  } catch {
+    // best-effort: fail silently
+  }
+};
+
+export const loadProjectNames = (): Record<string, string> => {
+  const configPath = expandHome(
+    join(DEFAULT_CONFIG.storage.home, CONFIG_FILE_NAME),
+  );
+  try {
+    const raw = readFileSync(configPath, "utf8");
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return (parsed.project_names as Record<string, string>) ?? {};
+  } catch {
+    return {};
+  }
 };
 
 export const loadConfig = (): FrierenConfig => {

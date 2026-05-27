@@ -11,7 +11,7 @@ import {
 import { createListDetail } from "../components/list-detail.js";
 import { createTextCard } from "../components/text-card.js";
 import { truncate } from "../lib/format.js";
-import { clearCache, getFileChunks, getProjectFiles, listIndexedProjects, type CodeChunk, type WisdomEntry } from "../lib/frieren.js";
+import { clearCache, getFileChunks, getProjectFiles, listIndexedProjects, resolveProjectName, type CodeChunk, type WisdomEntry } from "../lib/frieren.js";
 import { getTheme } from "../lib/theme.js";
 
 export function createCodebaseBrowser(renderer: CliRenderer): {
@@ -60,7 +60,8 @@ export function createCodebaseBrowser(renderer: CliRenderer): {
 
   function updateHeader(): void {
     headerText.fg = getTheme().muted;
-    headerText.content = `Project: ${currentProject() ?? "(none)"}  |  Page: ${page + 1}  |  Files: ${files.length}  |  Keys: p cycle  [,/.] page  Enter expand`;
+    const proj = currentProject();
+    headerText.content = `Project: ${proj ? resolveProjectName(proj) : "(none)"}  |  Page: ${page + 1}  |  Files: ${files.length}  |  Keys: p cycle  [,/.] page  Enter expand`;
   }
 
   function formatChunk(chunk: CodeChunk): string {

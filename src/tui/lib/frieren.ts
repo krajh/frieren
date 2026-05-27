@@ -2,7 +2,8 @@ import { Database } from "bun:sqlite";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 
-import { loadConfig } from "../../config.js";
+import { loadConfig, loadProjectNames, saveProjectName } from "../../config.js";
+import { detectProjectInfo } from "../../project/detectProjectId.js";
 import {
   getIndexDir,
   getQueueDbPath,
@@ -177,6 +178,44 @@ const clampLimit = (limit?: number): number => {
 const clampOffset = (offset = 0): number => {
   return Math.max(0, offset);
 };
+
+const shortHash = (projectId: string): string => projectId.slice(0, 8);
+
+/**
+ * Resolve a human-readable project name for a project ID.
+ * Priority: config override → auto-detected (cached) → short hash.
+ */
+export function resolveProjectName(projectId: string): string {
+  const names = loadProjectNames();
+  if (names[projectId]) {
+    return names[projectId];
+  }
+  return shortHash(projectId);
+}
+
+/**
+ * Get the current project's display name by detecting it from git,
+ * auto-saving to config for persistence.
+ */
+export function getCurrentProjectName(): string {
+  const info = detectProjectInfo();
+  if (!info) {
+    return "unknown";
+  }
+  // Auto-save display name if not yet in config
+  const names = loadProjectNames();
+  if (!names[info.projectId]) {
+    saveProjectName(info.projectId, info.displayName);
+  }
+  return info.displayName;
+}
+
+/**
+ * Get the current project ID from git detection.
+ */
+export function getCurrentProjectId(): string | null {
+  return detectProjectInfo()?.projectId ?? null;
+}
 
 const getDbFiles = (dirPath: string): string[] => {
   if (!existsSync(dirPath)) {

@@ -18,7 +18,7 @@ import { createKGBrowser } from "./screens/kg-browser.js";
 import { createReaperScreen } from "./screens/reaper-screen.js";
 import { createSessionBrowser } from "./screens/session-browser.js";
 import { createWisdomBrowser } from "./screens/wisdom-browser.js";
-import { getProjects, getStats, type FrierenStats } from "./lib/frieren.js";
+import { getCurrentProjectId, getCurrentProjectName, getProjects, getStats, type FrierenStats } from "./lib/frieren.js";
 import { getTheme, getThemeName, setTheme } from "./lib/theme.js";
 import type { WisdomEntry } from "./lib/frieren.js";
 
@@ -50,6 +50,11 @@ const isEscapeKey = (event: KeyEvent): boolean =>
   event.name === "escape" || event.sequence === "\u001b";
 
 const getProjectName = (): string => {
+  const currentId = getCurrentProjectId();
+  if (currentId) {
+    return getCurrentProjectName();
+  }
+  // Fall back to the first known project from session DBs
   const [firstProject] = getProjects();
   return firstProject ?? "frieren";
 };

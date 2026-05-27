@@ -4,9 +4,9 @@ import { join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Database } from "bun:sqlite";
 
-import { loadConfig } from "../../config.js";
+import { loadConfig, loadProjectNames } from "../../config.js";
 import { initDb } from "../../db/init.js";
-import { detectProjectId } from "../../project/detectProjectId.js";
+import { detectProjectInfo } from "../../project/detectProjectId.js";
 import {
   getIndexDbPath,
   getIndexDir,
@@ -22,6 +22,7 @@ type SessionStats = {
 
 type CodebaseProjectStat = {
   project_id: string;
+  display_name: string;
   file_count: number;
   chunk_count: number;
   last_indexed: string;
@@ -49,10 +50,12 @@ type StatusResponse = {
   };
   session: {
     projectId: string | null;
+    displayName?: string;
     stats: SessionStats;
   };
   index: {
     projectId: string | null;
+    displayName?: string;
     path: string | null;
     exists: boolean;
     sizeBytes: number | null;
@@ -165,9 +168,12 @@ const aggregateCodebaseStats = (): CodebaseProjectStat[] => {
           []
         >(`SELECT project_id, file_count, chunk_count, indexed_at FROM index_meta`)
         .all();
+      const names = loadProjectNames();
+      const resolveName = (pid: string): string => names[pid] ?? pid.slice(0, 8);
       for (const row of rows) {
         stats.push({
           project_id: row.project_id,
+          display_name: resolveName(row.project_id),
           file_count: row.file_count,
           chunk_count: row.chunk_count,
           last_indexed: row.indexed_at,
@@ -191,7 +197,10 @@ export const registerStatusTool = (server: McpServer): void => {
     },
     async () => {
       const config = loadConfig();
-      const projectId = detectProjectId();
+      const projectInfo = detectProjectInfo();
+      const projectId = projectInfo?.projectId ?? null;
+      const projectNames = loadProjectNames();
+      const resolveName = (pid: string): string => projectNames[pid] ?? pid.slice(0, 8);
 
       const wisdomPath = getWisdomDbPath();
       const wisdomStats = safeStat(wisdomPath);
@@ -245,10 +254,12 @@ export const registerStatusTool = (server: McpServer): void => {
         },
         session: {
           projectId,
+          displayName: projectId ? resolveName(projectId) : undefined,
           stats: sessionStats,
         },
         index: {
           projectId,
+          displayName: projectId ? resolveName(projectId) : undefined,
           path: indexPath,
           ...indexStats,
           vec: indexInit.vecLoaded
