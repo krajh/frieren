@@ -31,7 +31,7 @@ const log = (level: string, message: string, meta?: unknown) => {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const LITELLM_URL = "https://litellm.aitooling.mgsops.net/v1/chat/completions";
-const DEFAULT_MODEL = process.env.FRIEREN_LLM_MODEL ?? "gpt-5.4-nano";
+const DEFAULT_MODEL = process.env.FRIEREN_LLM_MODEL ?? "claude-sonnet-4-6";
 const MAX_CONTEXT_CHARS = 4000;
 const MAX_TOKENS = 2000;
 
