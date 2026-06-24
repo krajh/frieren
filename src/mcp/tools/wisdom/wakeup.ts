@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { Database } from "bun:sqlite";
+import { Database } from "../../../db/database.js";
 
 import { initDb } from "../../../db/init.js";
 import { compressL1 } from "../../../lib/frieren-compress.js";

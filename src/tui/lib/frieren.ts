@@ -1,4 +1,4 @@
-import { Database } from "bun:sqlite";
+import { Database } from "../../db/database.js";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 

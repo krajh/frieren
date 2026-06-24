@@ -2,7 +2,7 @@ import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { Database } from "bun:sqlite";
+import { Database } from "../../db/database.js";
 
 import { loadConfig, loadProjectNames } from "../../config.js";
 import { initDb } from "../../db/init.js";

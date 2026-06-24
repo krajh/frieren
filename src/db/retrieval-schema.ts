@@ -1,4 +1,4 @@
-import { Database } from "bun:sqlite";
+import { Database } from "./database.js";
 
 export const RETRIEVAL_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS retrieval_logs (

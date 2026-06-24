@@ -87,7 +87,7 @@ export const registerMemoryHistoryTool = (server: McpServer): void => {
 
         for (const dbPath of sessionDbFiles.slice(0, 10)) {
           try {
-            const { Database } = await import("bun:sqlite");
+            const { Database } = await import("../../../db/database.js");
             const db = new Database(dbPath);
 
             type EventRow = {
@@ -134,7 +134,7 @@ export const registerMemoryHistoryTool = (server: McpServer): void => {
 
         for (const dbPath of indexDbFiles.slice(0, 10)) {
           try {
-            const { Database } = await import("bun:sqlite");
+            const { Database } = await import("../../../db/database.js");
             const db = new Database(dbPath);
 
             type ChunkRow = {

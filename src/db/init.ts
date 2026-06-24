@@ -1,4 +1,4 @@
-import { Database } from "bun:sqlite";
+import { Database } from "./database.js";
 import * as sqliteVec from "sqlite-vec";
 
 import { ensureDir } from "../utils/fs.js";
@@ -34,7 +34,8 @@ const applySchema = (db: Database, statements: string[]): void => {
 
 const safeLoadVec = (db: Database): InitResult => {
   try {
-    sqliteVec.load(db);
+    // sqlite-vec needs the raw better-sqlite3 instance for loadExtension()
+    sqliteVec.load(db.raw);
     return { db, vecLoaded: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown error";

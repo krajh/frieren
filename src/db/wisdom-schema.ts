@@ -1,4 +1,4 @@
-import { Database } from "bun:sqlite";
+import { Database } from "./database.js";
 
 export const WISDOM_V2_MIGRATIONS = [
   `CREATE TABLE IF NOT EXISTS wisdom_relations (

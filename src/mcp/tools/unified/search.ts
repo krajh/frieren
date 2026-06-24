@@ -238,7 +238,7 @@ const searchSession = async (
   for (const dbPath of sessionDbFiles.slice(0, 10)) {
     // cap at 10 projects
     try {
-      const { Database } = await import("bun:sqlite");
+      const { Database } = await import("../../../db/database.js");
       const db = new Database(dbPath);
       applySessionMigrations(db, true);
 
@@ -368,7 +368,7 @@ const searchCodebase = async (
 
   for (const dbPath of indexDbFiles.slice(0, 10)) {
     try {
-      const { Database } = await import("bun:sqlite");
+      const { Database } = await import("../../../db/database.js");
       const db = new Database(dbPath);
       applyCodebaseMigrations(db, true);
 
